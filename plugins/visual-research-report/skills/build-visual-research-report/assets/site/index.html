@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Interactive, source-traceable research report">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23151922'/%3E%3Cpath d='M13 18h38v8H13zm0 13h28v6H13zm0 11h38v4H13z' fill='%231457ff'/%3E%3C/svg%3E">
+  <title>Visual Research Report</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#report-content">Skip to report</a>
+  <div id="app" aria-live="polite"></div>
+  <div class="drawer-scrim" id="drawer-scrim" hidden></div>
+  <aside class="evidence-drawer" id="evidence-drawer" aria-labelledby="drawer-title" aria-modal="true" role="dialog" hidden>
+    <button class="drawer-close" id="drawer-close" type="button" aria-label="Close evidence drawer">Close ×</button>
+    <div id="drawer-content"></div>
+  </aside>
+  <noscript>This report requires JavaScript for charts and evidence drilldowns.</noscript>
+  <script src="data/report-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

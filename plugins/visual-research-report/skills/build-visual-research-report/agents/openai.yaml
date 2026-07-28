@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual Research Report"
+  short_description: "Build source-traceable editorial research sites"
+  default_prompt: "Use $build-visual-research-report to match this reference with a sourced interactive report and offline package."

@@ -1,0 +1,20 @@
+{
+  "name": "visual-research-report",
+  "interface": {
+    "displayName": "Visual Research Report"
+  },
+  "plugins": [
+    {
+      "name": "visual-research-report",
+      "source": {
+        "source": "local",
+        "path": "./plugins/visual-research-report"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "schema": "visual-research-report@2",
+  "evidence_status": "synthetic",
+  "presentation": {
+    "preset": "editorial-longform"
+  },
+  "data_disclosure": {
+    "label": "Design demonstration · every numeric fact is synthetic",
+    "scope": "all-facts",
+    "placements": ["top-banner", "methodology", "package-manifest"]
+  },
+  "meta": {
+    "title": "The Package Becomes the System",
+    "subtitle": "A synthetic demonstration of how advanced packaging capacity, value capture and scenario risk can be read through one physical object.",
+    "kicker": "Semiconductors / advanced packaging",
+    "publisher": "Visual Research Lab",
+    "as_of": "2026-07-27",
+    "reading_time": "9 min",
+    "language": "en-US",
+    "summary": "This example exists to exercise every chart and evidence interaction in the plugin. All numbers and sources are synthetic and must not be used as investment research."
+  },
+  "ui_labels": {
+    "decision_framework": "Decision framework"
+  },
+  "theme_atom": {
+    "name": "2.5D chip package",
+    "description": "The package physically joins compute dies, memory, interposer and substrate, making it a useful atom for capacity, flow and value-capture analysis.",
+    "material": "silicon · copper · epoxy",
+    "views": [
+      {"id": "recursive", "label": "Recursive system", "alt": "A schematic 2.5D chip package repeating into a larger system"},
+      {"id": "exploded", "label": "Exploded assembly", "alt": "A schematic exploded view of the same 2.5D chip package"},
+      {"id": "blueprint", "label": "Engineering blueprint", "alt": "A schematic blueprint of the same 2.5D chip package"},
+      {"id": "impact", "label": "Arrival impact", "alt": "A schematic arrival view of the same 2.5D chip package"}
+    ]
+  },
+  "sources": [
+    {
+      "id": "S01",
+      "title": "Synthetic operating dataset for template verification",
+      "publisher": "Visual Research Lab",
+      "date": "2026-07-27",
+      "source_type": "dataset",
+      "classification": "primary",
+      "synthetic": true,
+      "locator": {"kind": "dataset", "section": "Template fixture", "table": "Synthetic operating data"},
+      "accessed_at": "2026-07-27",
+      "note": "Demonstration-only values generated to test layout, validation and interaction."
+    },
+    {
+      "id": "S02",
+      "title": "Synthetic scenario and probability memo",
+      "publisher": "Visual Research Lab",
+      "date": "2026-07-27",
+      "source_type": "analyst-memo",
+      "classification": "secondary",
+      "synthetic": true,
+      "locator": {"kind": "document", "section": "Scenario assumptions"},
+      "accessed_at": "2026-07-27",
+      "note": "Illustrative judgments, not forecasts or investment advice."
+    }
+  ],
+  "facts": [
+    {"id":"F01","label":"Package capacity in 2024","value":12,"display":"12k / month","unit":"k packages/month","basis":"Synthetic period-end nameplate capacity.","date":"2024","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F02","label":"Package capacity in 2026","value":36,"display":"36k / month","unit":"k packages/month","basis":"Synthetic period-end nameplate capacity.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F03","label":"Probability of a supply bottleneck","value":0.65,"display":"65%","unit":"probability","basis":"Synthetic analyst probability for the twelve-month horizon.","date":"2026-07-27","kind":"probability","synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F04","label":"Indexed package value pool","value":100,"display":"100 index","unit":"index points","basis":"Sum of the four synthetic value-stack layers.","date":"2026","kind":"derived","synthetic":true,"source_ids":["S01"],"derived_from":["F17","F18","F19","F20"],"formula":"F17 + F18 + F19 + F20","comparison_basis":"Synthetic 2026 value-pool composition","adjustment_scope":"all layers on the same indexed basis","boundary":"percentage-share","precision":0},
+    {"id":"F05","label":"Package capacity in 2025","value":22,"display":"22k / month","unit":"k packages/month","basis":"Synthetic period-end nameplate capacity.","date":"2025","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F06","label":"Compute die input","value":80,"display":"80 lots","unit":"lots","basis":"Synthetic lot count entering the demonstration flow.","date":"2026-Q2","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F07","label":"Memory stack input","value":72,"display":"72 lots","unit":"lots","basis":"Synthetic lot count entering the demonstration flow.","date":"2026-Q2","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F08","label":"Assembly throughput","value":64,"display":"64 lots","unit":"lots","basis":"Synthetic lots completing assembly.","date":"2026-Q2","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F09","label":"Qualified output","value":58,"display":"58 lots","unit":"lots","basis":"Synthetic lots passing qualification.","date":"2026-Q2","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F10","label":"Shipped output","value":54,"display":"54 lots","unit":"lots","basis":"Synthetic lots shipped to systems customers.","date":"2026-Q2","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F11","label":"Vendor A thermal score","value":82,"display":"82","unit":"score","basis":"Synthetic comparable score on a 0–100 scale.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F12","label":"Vendor A yield score","value":74,"display":"74","unit":"score","basis":"Synthetic comparable score on a 0–100 scale.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F13","label":"Vendor A scale score","value":91,"display":"91","unit":"score","basis":"Synthetic comparable score on a 0–100 scale.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F14","label":"Vendor B thermal score","value":68,"display":"68","unit":"score","basis":"Synthetic comparable score on a 0–100 scale.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F15","label":"Vendor B yield score","value":86,"display":"86","unit":"score","basis":"Synthetic comparable score on a 0–100 scale.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F16","label":"Vendor B scale score","value":63,"display":"63","unit":"score","basis":"Synthetic comparable score on a 0–100 scale.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F17","label":"Substrate value layer","value":18,"display":"18 index","unit":"index points","basis":"Synthetic indexed value contribution.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F18","label":"Interposer value layer","value":22,"display":"22 index","unit":"index points","basis":"Synthetic indexed value contribution.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F19","label":"Assembly value layer","value":28,"display":"28 index","unit":"index points","basis":"Synthetic indexed value contribution.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F20","label":"Test and qualification value layer","value":32,"display":"32 index","unit":"index points","basis":"Synthetic indexed value contribution.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F21","label":"Probability of yield improvement","value":0.52,"display":"52%","unit":"probability","basis":"Synthetic analyst probability for the twelve-month horizon.","date":"2026-07-27","kind":"probability","synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F22","label":"Probability of demand upside","value":0.38,"display":"38%","unit":"probability","basis":"Synthetic analyst probability for the twelve-month horizon.","date":"2026-07-27","kind":"probability","synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F23","label":"Synthetic demand index 2023","value":40,"display":"40","unit":"index points","basis":"Synthetic annual demand index.","date":"2023","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F24","label":"Synthetic demand index 2024","value":55,"display":"55","unit":"index points","basis":"Synthetic annual demand index.","date":"2024","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F25","label":"Synthetic demand index 2025","value":78,"display":"78","unit":"index points","basis":"Synthetic annual demand index.","date":"2025","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F26","label":"Synthetic demand index 2026","value":96,"display":"96","unit":"index points","basis":"Synthetic annual demand index.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F27","label":"Synthetic supply index 2023","value":43,"display":"43","unit":"index points","basis":"Synthetic annual supply index.","date":"2023","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F28","label":"Synthetic supply index 2024","value":48,"display":"48","unit":"index points","basis":"Synthetic annual supply index.","date":"2024","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F29","label":"Synthetic supply index 2025","value":63,"display":"63","unit":"index points","basis":"Synthetic annual supply index.","date":"2025","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F30","label":"Synthetic supply index 2026","value":82,"display":"82","unit":"index points","basis":"Synthetic annual supply index.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F31","label":"Base-case cycle time","value":18,"display":"18 days","unit":"days","basis":"Synthetic base-case cycle time.","date":"2026","kind":"scenario","synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F32","label":"Stress-case cycle time","value":27,"display":"27 days","unit":"days","basis":"Synthetic stress-case cycle time.","date":"2026","kind":"scenario","synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F33","label":"Base-case gross margin","value":24,"display":"24%","unit":"percent","basis":"Synthetic base-case gross margin.","date":"2026","kind":"scenario","synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F34","label":"Stress-case gross margin","value":17,"display":"17%","unit":"percent","basis":"Synthetic stress-case gross margin.","date":"2026","kind":"scenario","synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F35","label":"Qualified capacity index 2023","value":31,"display":"31","unit":"index points","basis":"Synthetic annual qualified-capacity index.","date":"2023","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F36","label":"Qualified capacity index 2024","value":45,"display":"45","unit":"index points","basis":"Synthetic annual qualified-capacity index.","date":"2024","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F37","label":"Qualified capacity index 2025","value":59,"display":"59","unit":"index points","basis":"Synthetic annual qualified-capacity index.","date":"2025","kind":"reported","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F38","label":"Qualified capacity index 2026","value":76,"display":"76","unit":"index points","basis":"Synthetic annual qualified-capacity index.","date":"2026","kind":"estimate","synthetic":true,"source_ids":["S01"],"derived_from":[]},
+    {"id":"F39","label":"Yield improvement force","value":4.5,"display":"4.5 / 5","unit":"score","basis":"Synthetic conviction score for improving package yield.","date":"2026-07-27","kind":"scenario","precision":1,"synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F40","label":"Demand durability force","value":3.8,"display":"3.8 / 5","unit":"score","basis":"Synthetic conviction score for durable accelerator demand.","date":"2026-07-27","kind":"scenario","precision":1,"synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F41","label":"Qualification-delay force","value":4.2,"display":"4.2 / 5","unit":"score","basis":"Synthetic conviction score for qualification delay risk.","date":"2026-07-27","kind":"scenario","precision":1,"synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F42","label":"Capital-intensity force","value":3.6,"display":"3.6 / 5","unit":"score","basis":"Synthetic conviction score for capital-intensity risk.","date":"2026-07-27","kind":"scenario","precision":1,"synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F43","label":"Utilization tripwire","value":2.5,"display":"2.5 / 5","unit":"score","basis":"Synthetic threshold indicating that utilization weakness would invalidate the base case.","date":"2026-07-27","kind":"threshold","precision":1,"synthetic":true,"source_ids":["S02"],"derived_from":[]},
+    {"id":"F44","label":"Stress-to-base cycle-time multiplier","value":1.5,"display":"×1.5","unit":"multiple","basis":"Stress cycle time divided by base cycle time.","date":"2026","kind":"derived","precision":1,"format":{"style":"multiplier","prefix":"×"},"formula":"F32 / F31","synthetic":true,"source_ids":["S02"],"derived_from":["F31","F32"]},
+    {"id":"F45","label":"Stress-to-base gross-margin multiplier","value":0.7083333333333334,"display":"×0.7","unit":"multiple","basis":"Stress gross margin divided by base gross margin.","date":"2026","kind":"derived","precision":1,"format":{"style":"multiplier","prefix":"×"},"formula":"F34 / F33","synthetic":true,"source_ids":["S02"],"derived_from":["F33","F34"]}
+  ],
+  "kpis": ["F02", "F04", "F03"],
+  "sections": [
+    {
+      "id": "capacity-system",
+      "eyebrow": "01 / Capacity",
+      "title": "Capacity arrives as physical packages, not a smooth curve",
+      "dek": "The entity ramp and process flow expose the discreteness and attrition hidden by aggregate forecasts.",
+      "body": [
+        {"type":"paragraph","text":"This synthetic example treats the 2.5D package as the unit of analysis. Capacity expands in steps, while lots are lost between input, assembly, qualification and shipment.","fact_ids":["F01","F02"]},
+        {"type":"quote","text":"All figures in this demonstration are synthetic and exist only to test the plugin.","source_ids":["S01"]}
+      ],
+      "charts": [
+        {"id":"C01","type":"entity-ramp","title":"Nameplate capacity triples in two synthetic steps","subtitle":"Synthetic period-end capacity; thousand packages per month","source_ids":["S01"],"note":"One glyph represents two thousand packages of monthly capacity.","data":{"entity_label":"capacity units","unit_size":2,"periods":[{"label":"2024","value":12,"display":"12k / month","fact_id":"F01"},{"label":"2025","value":22,"display":"22k / month","fact_id":"F05"},{"label":"2026E","value":36,"display":"36k / month","fact_id":"F02"}]}},
+        {"id":"C02","type":"destiny-flow","title":"The physical flow narrows before shipment","subtitle":"Synthetic lots moving through the package system, 2026-Q2","source_ids":["S01"],"data":{"nodes":[{"id":"compute","label":"Compute dies","stage":"Inputs","value":80,"display":"80 lots","fact_id":"F06"},{"id":"memory","label":"Memory stacks","stage":"Inputs","value":72,"display":"72 lots","fact_id":"F07"},{"id":"assembly","label":"Integrated packages","stage":"Assembly","value":64,"display":"64 lots","fact_id":"F08"},{"id":"qualified","label":"Qualified output","stage":"Qualification","value":58,"display":"58 lots","fact_id":"F09"},{"id":"shipped","label":"Shipped systems","stage":"Destination","value":54,"display":"54 lots","fact_id":"F10"}],"links":[{"source":"compute","target":"assembly","value":64},{"source":"memory","target":"assembly","value":64},{"source":"assembly","target":"qualified","value":58},{"source":"qualified","target":"shipped","value":54}]}}
+      ],
+      "annotation": "The entity view makes capacity additions legible; the flow view prevents the reader from treating nameplate capacity as sellable output.",
+      "takeaways": ["Track physical bottlenecks separately from announced capacity.", "Do not equate installed tools with qualified shipment volume."]
+    },
+    {
+      "id": "competition-value",
+      "eyebrow": "02 / Positioning",
+      "title": "Competitive advantage changes by dimension and layer",
+      "dek": "A matrix supports multi-dimensional scanning; a value stack preserves the physical order of the package.",
+      "body": [
+        {"type":"paragraph","text":"Synthetic vendor scores show that leadership is not one-dimensional. The value pool also concentrates in later assembly, test and qualification steps.","fact_ids":["F13","F15","F20"]}
+      ],
+      "charts": [
+        {"id":"C03","type":"matrix-heat","title":"Vendor leadership rotates across technical dimensions","subtitle":"Synthetic comparable score; actual 0–100 scale","source_ids":["S01"],"data":{"columns":["Thermal","Yield","Scale"],"scale":{"mode":"actual","domain":[0,100],"ticks":[0,20,40,60,80,100],"unit":"score"},"rows":[{"label":"Vendor A","values":[{"value":82,"fact_id":"F11"},{"value":74,"fact_id":"F12"},{"value":91,"fact_id":"F13"}]},{"label":"Vendor B","values":[{"value":68,"fact_id":"F14"},{"value":86,"fact_id":"F15"},{"value":63,"fact_id":"F16"}]}]}},
+        {"id":"C04","type":"value-stack","title":"Qualification captures the largest synthetic value layer","subtitle":"Indexed value pool; layers sum to 100","source_ids":["S01"],"data":{"encoding":"share","share_total":100,"total_display":"100 index","layers":[{"label":"Substrate","value":18,"display":"18 index","description":"Physical base and routing","fact_id":"F17"},{"label":"Interposer","value":22,"display":"22 index","description":"High-density die connection","fact_id":"F18"},{"label":"Assembly","value":28,"display":"28 index","description":"Bonding and integration","fact_id":"F19"},{"label":"Test & qualification","value":32,"display":"32 index","description":"Validated system output","fact_id":"F20"}]}}
+      ],
+      "annotation": "Heat intensity supports scanning, but every cell retains its number. The stack is ordered by the physical assembly rather than by visual size.",
+      "takeaways": ["Benchmark by constraint, not by a single composite score.", "Map economics onto the physical package before discussing market share."]
+    },
+    {
+      "id": "history-scenarios",
+      "eyebrow": "03 / Timing",
+      "title": "History explains the setup; probabilities expose the judgment",
+      "dek": "The timeline separates sequence from forecast, while the odds board makes scenario assumptions explicit.",
+      "body": [
+        {"type":"callout","title":"Interpretation boundary","text":"A probability is an analyst judgment as of a date, not a reported future fact.","fact_ids":["F03"]}
+      ],
+      "charts": [
+        {"id":"C05","type":"timeline","title":"Three synthetic steps create the current capacity regime","subtitle":"Illustrative events and observation dates","source_ids":["S01"],"data":{"events":[{"date":"2024","title":"Baseline installed","description":"The demonstration begins at twelve thousand packages per month.","fact_id":"F01","source_ids":["S01"]},{"date":"2025","title":"Second module qualifies","description":"Capacity rises after a discrete qualification step.","fact_id":"F05","source_ids":["S01"]},{"date":"2026E","title":"Third module enters estimate","description":"Estimated nameplate capacity reaches thirty-six thousand per month.","fact_id":"F02","source_ids":["S01"]}]}},
+        {"id":"C06","type":"odds-board","title":"The largest synthetic risk is a supply bottleneck","subtitle":"Illustrative twelve-month probabilities as of 2026-07-27","source_ids":["S02"],"data":{"items":[{"label":"Supply bottleneck persists","probability":0.65,"horizon":"12 months","trigger":"Qualification slips","fact_id":"F03"},{"label":"Yield improves faster","probability":0.52,"horizon":"12 months","trigger":"Defect density falls","fact_id":"F21"},{"label":"Demand exceeds base case","probability":0.38,"horizon":"12 months","trigger":"Accelerator orders accelerate","fact_id":"F22"}]}},
+        {"id":"C09","type":"tension-balance","title":"The thesis balances operating upside against qualification risk","subtitle":"Synthetic analyst conviction on an actual 0–5 score scale","source_ids":["S02"],"data":{"center_label":"Qualification timing determines whether installed capacity becomes economic output","scale":{"mode":"actual","domain":[0,5],"ticks":[0,1,2,3,4,5],"unit":"score"},"long":[{"label":"Yield improvement","fact_id":"F39"},{"label":"Demand durability","fact_id":"F40"}],"short":[{"label":"Qualification delay","fact_id":"F41"},{"label":"Capital intensity","fact_id":"F42"}],"tripwires":[{"label":"Utilization falls below the modeled threshold","fact_id":"F43"}]}}
+      ],
+      "annotation": "The visual grammar deliberately separates dated observations from forward-looking odds.",
+      "takeaways": ["Tie every probability to a horizon and observable trigger.", "Update the odds board when evidence changes, not on a fixed aesthetic cadence."]
+    },
+    {
+      "id": "precision-window",
+      "eyebrow": "04 / Precision",
+      "title": "Use conventional charts only when exact reading is the task",
+      "dek": "A line chart is justified for the demand-supply path; paired bars are justified for explicit scenario comparisons.",
+      "body": [
+        {"type":"paragraph","text":"The line chart is not a default. It appears here because the exact gap across ordered years matters. The paired bars exist because two named cases must be compared directly.","fact_ids":["F26","F30","F31","F32"]}
+      ],
+      "charts": [
+        {"id":"C07","type":"line","title":"Synthetic demand stays above supply after 2024","subtitle":"Index points; exact annual observations and estimates on an actual scale","source_ids":["S01"],"data":{"scale":{"mode":"actual","domain":[0,100],"ticks":[0,20,40,60,80,100],"unit":"index points"},"series":[{"name":"Demand","points":[{"x":"2023","y":40,"fact_id":"F23"},{"x":"2024","y":55,"fact_id":"F24"},{"x":"2025","y":78,"fact_id":"F25"},{"x":"2026E","y":96,"fact_id":"F26"}]},{"name":"Supply","points":[{"x":"2023","y":43,"fact_id":"F27"},{"x":"2024","y":48,"fact_id":"F28"},{"x":"2025","y":63,"fact_id":"F29"},{"x":"2026E","y":82,"fact_id":"F30"}]},{"name":"Qualified capacity","points":[{"x":"2023","y":31,"fact_id":"F35"},{"x":"2024","y":45,"fact_id":"F36"},{"x":"2025","y":59,"fact_id":"F37"},{"x":"2026E","y":76,"fact_id":"F38"}]}]}},
+        {"id":"C08","type":"paired-bars","title":"Stress changes both cycle time and margin","subtitle":"Synthetic base and stress cases, 2026; each pair uses its own actual scale","source_ids":["S02"],"data":{"scale":{"mode":"per-pair-actual"},"items":[{"label":"Cycle time","multiplier_fact_id":"F44","scale":{"mode":"actual","domain":[0,30],"ticks":[0,10,20,30],"unit":"days"},"left":{"label":"Base","value":18,"display":"18 days","fact_id":"F31"},"right":{"label":"Stress","value":27,"display":"27 days","fact_id":"F32"}},{"label":"Gross margin","multiplier_fact_id":"F45","scale":{"mode":"actual","domain":[0,30],"ticks":[0,10,20,30],"unit":"percent"},"left":{"label":"Base","value":24,"display":"24%","fact_id":"F33"},"right":{"label":"Stress","value":17,"display":"17%","fact_id":"F34"}}]}}
+      ],
+      "annotation": "The chart form follows the reading task: ordered path for trends, explicit pairs for scenarios.",
+      "takeaways": ["Conventional charts are tools of precision, not default decoration.", "Keep scenario values visibly distinct from reported observations."]
+    }
+  ],
+  "methodology": [
+    "All values are synthetic and were chosen to exercise the plugin's validation, chart routing and evidence drawer.",
+    "The example preserves numeric machine values separately from display formatting.",
+    "Probabilities are illustrative analyst judgments with an explicit as-of date and horizon."
+  ],
+  "disclosures": [
+    "This is a software demonstration, not investment research or a factual semiconductor dataset.",
+    "No synthetic number should be copied into a real report without replacement and source verification.",
+    "Cover views use the built-in schematic fallback because no generated or supplied hero assets are bundled."
+  ]
+}
