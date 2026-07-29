@@ -6,6 +6,7 @@
 - Added fact-validated `history-scrolly` charts with ordered focus scenes and reduced-motion/print fallbacks.
 - Added `causal-horizon-map` charts with fact-bound signals, lags, thresholds, confidence, direction, sparklines and directed edges.
 - Added declarative theme-atom engineering schematics so one physical object can drive recursive, exploded, blueprint and impact cover states without raster artwork.
+- Added an Image 2-first theme-atom production path: freeze one canonical identity anchor, derive all four cover states directly from it, record generation provenance, and reject missing or inconsistent production assets instead of silently degrading.
 - Extended browser and package QA for scroll scenes, causal-node semantics, engineering cover parts and responsive sticky navigation.
 
 ## 0.3.0

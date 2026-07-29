@@ -8,6 +8,54 @@ async page => {
   page.on('pageerror', error => consoleErrors.push(`pageerror: ${error.message}`));
   page.on('requestfailed', request => consoleErrors.push(`requestfailed: ${request.url()} ${request.failure()?.errorText || ''}`));
   const assert = (condition, message) => { if (!condition) failures.push(message); };
+  const coverModes = ['recursive', 'exploded', 'blueprint', 'impact'];
+  const waitForCoverReady = async label => {
+    try {
+      await page.waitForFunction(() => {
+        const stage = document.getElementById('cover-stage');
+        return stage?.dataset.coverReady === 'true' && stage.getAttribute('aria-busy') === 'false' && !stage.dataset.coverPending;
+      }, null, { timeout: 15000 });
+    } catch (_error) {
+      assert(false, `${label}: cover image did not reach a decoded, non-busy state`);
+    }
+  };
+  const readCoverState = () => page.evaluate(() => {
+    const stage = document.getElementById('cover-stage');
+    const visual = stage?.querySelector('[data-cover-visual].is-active');
+    const image = visual?.querySelector('.cover-image');
+    const src = image?.currentSrc || image?.src || '';
+    let sourceHash = 2166136261;
+    for (let index = 0; index < src.length; index += 1) {
+      sourceHash ^= src.charCodeAt(index);
+      sourceHash = Math.imul(sourceHash, 16777619);
+    }
+    const views = window.REPORT_DATA?.theme_atom?.views || [];
+    const productionMode = window.REPORT_DATA?.theme_atom?.production?.mode || '';
+    return {
+      mode: stage?.dataset.coverMode || '',
+      renderer: stage?.dataset.coverRenderer || '',
+      ready: stage?.dataset.coverReady === 'true',
+      busy: stage?.getAttribute('aria-busy') === 'true',
+      activeVisuals: stage?.querySelectorAll('[data-cover-visual].is-active').length || 0,
+      productionMode,
+      assetMode: productionMode === 'image-2' || views.some(view => Boolean(view?.asset)),
+      assetCount: views.filter(view => Boolean(view?.asset)).length,
+      image: image ? {
+        complete: image.complete,
+        decoded: image.dataset.coverDecoded === 'true',
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        sourceFingerprint: `${src.length}:${sourceHash >>> 0}`,
+        objectFit: getComputedStyle(image).objectFit,
+        objectPosition: getComputedStyle(image).objectPosition,
+        declaredWidth: image.getAttribute('width') || '',
+        declaredHeight: image.getAttribute('height') || '',
+      } : null,
+      schematicParts: visual?.querySelectorAll('.schematic-parts [data-part-id]').length || 0,
+      coverAnimations: [...(visual?.querySelectorAll('.atom-part') || [])].map(part => getComputedStyle(part).animationName),
+      coverTransitions: [...(stage?.querySelectorAll('[data-cover-visual],.cover-image') || [])].map(element => getComputedStyle(element).transitionDuration),
+    };
+  });
   const targets = [
     { name: 'site', path: 'site/index.html' },
     { name: 'single', path: 'report.html' },
@@ -25,14 +73,16 @@ async page => {
       await page.goto(`${baseUrl}/${target.path}`, { waitUntil: 'networkidle' });
       await page.waitForSelector('.report-section');
       await page.evaluate(() => document.fonts?.ready || Promise.resolve());
-      await page.waitForTimeout(100);
       const label = `${target.name}/${viewport.name}`;
+      await waitForCoverReady(label);
+      await page.waitForTimeout(100);
 
       await page.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-viewport.png` });
       screenshots += 1;
       const coverStage = page.locator('#cover-stage');
       await coverStage.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-cover.png` });
       screenshots += 1;
+      const initialCover = await readCoverState();
       const representative = page.locator('.chart-plate').first();
       await representative.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-chart.png` });
       screenshots += 1;
@@ -124,8 +174,21 @@ async page => {
       assert(geometry.overflow <= 1, `${label}: document overflows horizontally by ${geometry.overflow}px`);
       assert(geometry.escapedElements.length === 0, `${label}: elements escape viewport: ${geometry.escapedElements.join(', ')}`);
       assert(geometry.coverTabs === 4, `${label}: expected four cover tabs, found ${geometry.coverTabs}`);
-      assert(geometry.schematicParts >= 2, `${label}: engineering cover schematic did not render`);
-      assert(geometry.coverAnimations.every(name => name === 'none'), `${label}: cover animation remains active under reduced motion`);
+      assert(initialCover.ready && !initialCover.busy, `${label}: cover remained busy after readiness wait`);
+      assert(initialCover.activeVisuals === 1, `${label}: cover must expose exactly one active visual`);
+      assert(initialCover.coverTransitions.every(duration => duration.split(',').every(value => Number.parseFloat(value) === 0)), `${label}: cover transition remains active under reduced motion`);
+      if (initialCover.assetMode) {
+        assert(initialCover.assetCount === 4, `${label}: Image-2/asset cover requires four assets, found ${initialCover.assetCount}`);
+        assert(initialCover.renderer === 'asset', `${label}: declared asset cover rendered as ${initialCover.renderer || 'unknown'}`);
+        assert(initialCover.image?.complete && initialCover.image?.decoded, `${label}: active cover image was not loaded and decoded`);
+        assert(initialCover.image?.naturalWidth > 0 && initialCover.image?.naturalHeight > 0, `${label}: active cover image has empty intrinsic dimensions`);
+        assert(['cover', 'contain', 'scale-down'].includes(initialCover.image?.objectFit), `${label}: cover image has invalid object-fit`);
+        assert(Boolean(initialCover.image?.objectPosition), `${label}: cover image has no focal/object position`);
+      } else {
+        assert(initialCover.renderer === 'schematic' || initialCover.renderer === 'fallback', `${label}: schematic cover renderer marker is missing`);
+        assert(initialCover.schematicParts >= 2, `${label}: engineering cover schematic did not render`);
+        assert(initialCover.coverAnimations.every(name => name === 'none'), `${label}: cover animation remains active under reduced motion`);
+      }
       assert(geometry.chartCount > 0, `${label}: no charts rendered`);
       assert(geometry.disclosure, `${label}: synthetic disclosure missing`);
       assert(geometry.smallTargets.length === 0, `${label}: touch targets below 40px: ${geometry.smallTargets.join(', ')}`);
@@ -164,13 +227,39 @@ async page => {
 
       const firstTab = page.locator('[role="tab"]').first();
       const initialMode = await coverStage.getAttribute('data-cover-mode');
-      const initialPartCount = await coverStage.locator('.schematic-parts [data-part-id]').count();
+      const initialPartCount = initialCover.schematicParts;
       await firstTab.focus();
       await page.keyboard.press('ArrowRight');
+      await waitForCoverReady(`${label}/keyboard`);
       const activeTab = page.locator('[role="tab"][aria-selected="true"]');
+      const keyboardCover = await readCoverState();
       assert(await activeTab.getAttribute('tabindex') === '0', `${label}: cover roving tabindex failed`);
       assert(await coverStage.getAttribute('data-cover-mode') !== initialMode, `${label}: cover stage did not change with keyboard navigation`);
-      assert(await coverStage.locator('.schematic-parts [data-part-id]').count() === initialPartCount, `${label}: cover mode changed the physical schematic parts`);
+      if (initialCover.assetMode) {
+        assert(keyboardCover.renderer === 'asset' && keyboardCover.image?.decoded, `${label}: keyboard-selected cover asset did not decode`);
+        assert(keyboardCover.image?.sourceFingerprint !== initialCover.image?.sourceFingerprint, `${label}: adjacent cover tabs reused the same asset`);
+      } else {
+        assert(await coverStage.locator('.schematic-parts [data-part-id]').count() === initialPartCount, `${label}: cover mode changed the physical schematic parts`);
+      }
+
+      if (viewport.name === 'desktop') {
+        const fingerprints = [];
+        for (const mode of coverModes) {
+          await page.locator(`[data-cover-view="${mode}"]`).click();
+          await waitForCoverReady(`${label}/${mode}/reduced`);
+          const state = await readCoverState();
+          assert(state.mode === mode && state.activeVisuals === 1, `${label}: ${mode} did not become the sole active cover state`);
+          if (state.assetMode) {
+            assert(state.renderer === 'asset' && state.image?.decoded && state.image?.naturalWidth > 0, `${label}: ${mode} asset did not load`);
+            fingerprints.push(state.image?.sourceFingerprint);
+          } else {
+            assert(state.schematicParts === initialPartCount, `${label}: ${mode} changed the physical schematic parts`);
+          }
+          await coverStage.screenshot({ path: `${artifactDir}/${target.name}-desktop-cover-${mode}-reduced.png` });
+          screenshots += 1;
+        }
+        if (initialCover.assetMode) assert(new Set(fingerprints).size === 4, `${label}: the four cover states do not use four unique loaded assets`);
+      }
 
       const nav = page.locator('.rail-nav a').first();
       const href = await nav.getAttribute('href');
@@ -227,13 +316,31 @@ async page => {
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto(`${baseUrl}/site/index.html`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('#cover-stage .atom-engineering-svg');
-  for (const mode of ['recursive', 'exploded', 'blueprint', 'impact']) {
-    await page.locator(`[data-cover-view="${mode}"]`).click();
-    await page.waitForTimeout(mode === 'recursive' ? 650 : mode === 'exploded' ? 900 : 520);
-    await page.locator('#cover-stage').screenshot({ path: `${artifactDir}/site-desktop-cover-${mode}-motion.png` });
-    screenshots += 1;
+  for (const target of targets) {
+    const label = `${target.name}/desktop/motion`;
+    await page.goto(`${baseUrl}/${target.path}`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('#cover-stage [data-cover-visual]');
+    await waitForCoverReady(label);
+    const fingerprints = [];
+    let assetMode = false;
+    for (const mode of coverModes) {
+      await page.locator(`[data-cover-view="${mode}"]`).click();
+      await waitForCoverReady(`${label}/${mode}`);
+      const state = await readCoverState();
+      assetMode = state.assetMode;
+      assert(state.mode === mode && state.activeVisuals === 1, `${label}: ${mode} did not settle before capture`);
+      if (state.assetMode) {
+        assert(state.renderer === 'asset' && state.image?.decoded && state.image?.naturalWidth > 0, `${label}: ${mode} asset did not decode before capture`);
+        fingerprints.push(state.image?.sourceFingerprint);
+      } else {
+        assert(state.renderer === 'schematic' || state.renderer === 'fallback', `${label}: ${mode} lacks a renderer marker`);
+        assert(state.schematicParts >= 2, `${label}: ${mode} schematic parts are missing`);
+      }
+      await page.waitForTimeout(state.assetMode ? 80 : (mode === 'recursive' ? 650 : mode === 'exploded' ? 900 : 520));
+      await page.locator('#cover-stage').screenshot({ path: `${artifactDir}/${target.name}-desktop-cover-${mode}-motion.png` });
+      screenshots += 1;
+    }
+    if (assetMode) assert(new Set(fingerprints).size === 4, `${label}: the four motion captures do not use four unique loaded assets`);
   }
   assert(consoleErrors.length === 0, `browser errors: ${consoleErrors.join(' | ')}`);
   if (failures.length) throw new Error(`Visual Research Report browser QA failed:\n${failures.join('\n')}`);

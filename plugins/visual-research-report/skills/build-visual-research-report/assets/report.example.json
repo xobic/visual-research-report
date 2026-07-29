@@ -26,11 +26,75 @@
     "name": "2.5D chip package",
     "description": "The package physically joins compute dies, memory, interposer and substrate, making it a useful atom for capacity, flow and value-capture analysis.",
     "material": "silicon · copper · epoxy",
+    "identity_lock": {
+      "object_key": "chip-package-v1",
+      "physical_class": "assembled exposed-die 2.5D semiconductor package",
+      "silhouette": "low rectangular green-black substrate with one clipped lower-left corner",
+      "part_ids": ["substrate", "interposer", "compute", "memory-a", "memory-b", "interface-via"],
+      "topology": [
+        "compute and both memory stacks sit on the interposer",
+        "the interposer sits on the organic substrate"
+      ],
+      "materials": ["matte graphite silicon", "navy stacked memory", "blue-black interposer", "green-black organic substrate", "copper routing"],
+      "fiducials": ["one clipped lower-left substrate corner", "one wide compute die left of center", "two equal memory stacks aligned on the right", "six gold contact pads on the near edge"]
+    },
+    "camera_lock": {
+      "projection": "orthographic-like three-quarter product view",
+      "yaw_deg": 35,
+      "pitch_deg": 27,
+      "roll_deg": 0,
+      "focal_length_equiv_mm": 85,
+      "object_center": [0.5, 0.51],
+      "safe_margin": 0.1
+    },
+    "production": {
+      "mode": "image-2",
+      "model": "gpt-image-2",
+      "engine": "built-in-image_gen",
+      "workflow": "canonical-anchor-plus-direct-edits",
+      "anchor_asset": "theme-atom-image2/identity-anchor.png",
+      "prompt_version": "atom-cover-v1",
+      "canvas": {"width": 1448, "height": 1086},
+      "master_format": "png",
+      "delivery_format": "webp",
+      "print_view_id": "recursive",
+      "fallback": "schematic-explicit-only",
+      "generated_at": "2026-07-29T08:54:00Z",
+      "contact_sheet_asset": "theme-atom-image2/contact-sheet.png"
+    },
     "views": [
-      {"id": "recursive", "label": "Recursive system", "alt": "A schematic 2.5D chip package repeating into a larger system"},
-      {"id": "exploded", "label": "Exploded assembly", "alt": "A schematic exploded view of the same 2.5D chip package"},
-      {"id": "blueprint", "label": "Engineering blueprint", "alt": "A schematic blueprint of the same 2.5D chip package"},
-      {"id": "impact", "label": "Arrival impact", "alt": "A schematic arrival view of the same 2.5D chip package"}
+      {
+        "id": "recursive",
+        "label": "Recursive system",
+        "alt": "The same 2.5D chip package repeating at smaller scales into its physical system",
+        "asset": "theme-atom-image2/recursive.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/recursive","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"729f47149c1c1a4106c2e389574d72b9fae96b6b79ad97f5f64210f7eee7197a"}
+      },
+      {
+        "id": "exploded",
+        "label": "Exploded assembly",
+        "alt": "The same package separated into compute, memory, interposer and substrate along its real assembly axis",
+        "asset": "theme-atom-image2/exploded.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/exploded","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"859c7bd635866fe47d6cbff7ca24de190aa6bb6d05ac3f60ad447c3de92433fa"}
+      },
+      {
+        "id": "blueprint",
+        "label": "Engineering blueprint",
+        "alt": "A cobalt engineering-line treatment of the same assembled 2.5D chip package",
+        "asset": "theme-atom-image2/blueprint.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/blueprint","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"57c4659fe79732dfb26ce303ca31348109fe6d07ebcc59d60d552d173f3aee78"}
+      },
+      {
+        "id": "impact",
+        "label": "Arrival impact",
+        "alt": "The same assembled package rising from a black antistatic semiconductor carrier tray",
+        "asset": "theme-atom-image2/impact.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/impact","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"f0b845790055ea3e34425cd5e515079cfd8de4c4894e77b2341f8fa9a7f9e5ce"}
+      }
     ],
     "schematic": {
       "view_box": [100, 100],
@@ -231,6 +295,6 @@
   "disclosures": [
     "This is a software demonstration, not investment research or a factual semiconductor dataset.",
     "No synthetic number should be copied into a real report without replacement and source verification.",
-    "Cover views use one declared engineering schematic because no generated or supplied hero assets are bundled."
+    "Cover views were generated with Image 2 from one canonical identity anchor; the bundled engineering schematic remains an explicit fallback and is not the active renderer."
   ]
 }

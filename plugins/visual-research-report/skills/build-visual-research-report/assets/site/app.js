@@ -193,6 +193,51 @@
     return `<button class="${className}" type="button" data-fact-id="${escapeHtml(factId)}" data-kind="${escapeHtml(fact.kind)}">${escapeHtml(label ?? fact.display)}</button>`;
   };
 
+  const positiveImageDimension = (...values) => {
+    const value = values.map(Number).find((candidate) => Number.isFinite(candidate) && candidate > 0);
+    return value ? String(Math.round(value)) : "";
+  };
+
+  const coverPositionToken = (value, fallback) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const percent = value >= 0 && value <= 1 ? value * 100 : value;
+      return `${Math.max(0, Math.min(100, percent))}%`;
+    }
+    const text = String(value ?? "").trim().toLowerCase();
+    if (/^(?:left|center|right|top|bottom)$/.test(text)) return text;
+    const numeric = text.match(/^(-?\d+(?:\.\d+)?)%$/);
+    if (numeric) return `${Math.max(0, Math.min(100, Number(numeric[1])))}%`;
+    return fallback;
+  };
+
+  const coverObjectPosition = (view) => {
+    const explicit = String(view.object_position || "").trim().toLowerCase();
+    if (/^(?:(?:left|center|right|top|bottom)|(?:-?\d+(?:\.\d+)?%))(?:\s+(?:(?:left|center|right|top|bottom)|(?:-?\d+(?:\.\d+)?%)))?$/.test(explicit)) return explicit;
+    const focal = view.focal_point;
+    if (Array.isArray(focal) && focal.length >= 2) return `${coverPositionToken(focal[0], "50%")} ${coverPositionToken(focal[1], "50%")}`;
+    if (focal && typeof focal === "object") return `${coverPositionToken(focal.x, "50%")} ${coverPositionToken(focal.y, "50%")}`;
+    if (typeof focal === "string") {
+      const tokens = focal.trim().split(/\s+/);
+      if (tokens.length >= 2) return `${coverPositionToken(tokens[0], "50%")} ${coverPositionToken(tokens[1], "50%")}`;
+    }
+    return "50% 50%";
+  };
+
+  const coverImagePresentation = (view) => {
+    const dimensions = view.dimensions && typeof view.dimensions === "object" ? view.dimensions : {};
+    const width = positiveImageDimension(view.width, view.asset_width, view.intrinsic_width, dimensions.width);
+    const height = positiveImageDimension(view.height, view.asset_height, view.intrinsic_height, dimensions.height);
+    const requestedFit = String(view.object_fit || view.fit || "").trim().toLowerCase();
+    const fit = ["cover", "contain", "scale-down"].includes(requestedFit) ? requestedFit : (view.id === "blueprint" ? "contain" : "cover");
+    return { width, height, fit, position: coverObjectPosition(view) };
+  };
+
+  const coverRendererForView = (view, forceFallback = false) => {
+    if (view?.asset && !forceFallback) return "asset";
+    if (report.theme_atom?.schematic?.parts?.length) return "schematic";
+    return "fallback";
+  };
+
   const renderSchematic = (schematic) => {
     const dimensions = Array.isArray(schematic?.view_box) ? schematic.view_box.map(Number) : [];
     const width = Number.isFinite(dimensions[0]) && dimensions[0] > 0 ? dimensions[0] : 1200;
@@ -245,35 +290,50 @@
     return `<svg class="atom-engineering-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"><g class="schematic-echo schematic-echo-far" aria-hidden="true">${echo}</g><g class="schematic-echo schematic-echo-near" aria-hidden="true">${echo}</g><g class="schematic-connections">${connections}</g><g class="schematic-parts">${shapes}</g></svg>`;
   };
 
-  const renderCoverVisual = (view) => {
+  const renderCoverVisual = (view, { active = false, forceFallback = false } = {}) => {
     const atom = report.theme_atom || {};
-    if (view.asset) return `<img class="cover-image" src="${escapeHtml(view.asset)}" alt="${escapeHtml(view.alt)}">`;
+    const renderer = coverRendererForView(view, forceFallback);
+    const state = active ? " is-active" : "";
+    const hidden = active ? "false" : "true";
+    if (renderer === "asset") {
+      const presentation = coverImagePresentation(view);
+      const dimensions = `${presentation.width ? ` width="${presentation.width}"` : ""}${presentation.height ? ` height="${presentation.height}"` : ""}`;
+      return `<div class="cover-visual cover-visual--asset${state}" data-cover-visual data-cover-visual-id="${escapeHtml(view.id)}" data-cover-renderer="asset" aria-hidden="${hidden}"><img class="cover-image" src="${escapeHtml(view.asset)}" alt="${escapeHtml(view.alt)}" decoding="async" loading="eager" fetchpriority="high"${dimensions} style="--cover-object-fit:${escapeHtml(presentation.fit)};--cover-object-position:${escapeHtml(presentation.position)}"></div>`;
+    }
     if (atom.schematic?.parts?.length) {
-      return `<div class="atom-schematic atom-schematic-engineered" role="img" aria-label="${escapeHtml(view.alt)}">
-        <span class="schematic-tag">${escapeHtml(view.label)}</span>${renderSchematic(atom.schematic)}
+      return `<div class="cover-visual cover-visual--schematic${state}" data-cover-visual data-cover-visual-id="${escapeHtml(view.id)}" data-cover-renderer="schematic" aria-hidden="${hidden}"><div class="atom-schematic atom-schematic-engineered" role="img" aria-label="${escapeHtml(view.alt)}">
+          <span class="schematic-tag">${escapeHtml(view.label)}</span>${renderSchematic(atom.schematic)}
+          <strong class="atom-name">${escapeHtml(atom.name)}</strong>
+          <span class="atom-caption"><span>${escapeHtml(view.label)}</span><span>${escapeHtml(atom.material || t("physical_system"))}</span></span>
+        </div></div>`;
+    }
+    return `<div class="cover-visual cover-visual--fallback${state}" data-cover-visual data-cover-visual-id="${escapeHtml(view.id)}" data-cover-renderer="fallback" aria-hidden="${hidden}"><div class="atom-schematic" role="img" aria-label="${escapeHtml(view.alt)}">
+        <span class="schematic-tag">${escapeHtml(t("schematic_fallback"))}</span>
+        <span class="atom-layer layer-b"></span><span class="atom-layer layer-a"></span><span class="atom-core"></span>
         <strong class="atom-name">${escapeHtml(atom.name)}</strong>
         <span class="atom-caption"><span>${escapeHtml(view.label)}</span><span>${escapeHtml(atom.material || t("physical_system"))}</span></span>
-      </div>`;
-    }
-    return `<div class="atom-schematic" role="img" aria-label="${escapeHtml(view.alt)}">
-      <span class="schematic-tag">${escapeHtml(t("schematic_fallback"))}</span>
-      <span class="atom-layer layer-b"></span><span class="atom-layer layer-a"></span><span class="atom-core"></span>
-      <strong class="atom-name">${escapeHtml(atom.name)}</strong>
-      <span class="atom-caption"><span>${escapeHtml(view.label)}</span><span>${escapeHtml(atom.material || t("physical_system"))}</span></span>
-    </div>`;
+      </div></div>`;
   };
 
   const renderCover = () => {
     const meta = report.meta;
     const views = report.theme_atom?.views || [];
     const active = views[0] || { id: "recursive", label: "Recursive", alt: report.theme_atom?.name || "Theme atom" };
+    const renderer = coverRendererForView(active);
+    const coverReady = renderer === "asset" ? "false" : "true";
+    const productionMode = report.theme_atom?.production?.mode || (renderer === "asset" ? "assets" : "schematic");
+    const canvasWidth = Number(report.theme_atom?.production?.canvas?.width);
+    const canvasHeight = Number(report.theme_atom?.production?.canvas?.height);
+    const stageStyle = renderer === "asset" && Number.isFinite(canvasWidth) && canvasWidth > 0 && Number.isFinite(canvasHeight) && canvasHeight > 0
+      ? ` style="--cover-asset-aspect:${canvasWidth} / ${canvasHeight}"`
+      : "";
     return `<header class="masthead"><span class="masthead-mark">${escapeHtml(meta.publisher)}</span><span class="masthead-meta"><span>${escapeHtml(t("interactive_research"))}</span> · ${escapeHtml(meta.as_of)}</span></header>
       <section class="cover" aria-labelledby="report-title"><div class="cover-grid"><div class="cover-copy">
         <p class="kicker">${escapeHtml(meta.kicker)}</p><h1 class="cover-title" id="report-title">${escapeHtml(meta.title)}</h1>
         <p class="cover-subtitle">${escapeHtml(meta.subtitle)}</p><p class="cover-summary">${escapeHtml(meta.summary)}</p>
         <div class="cover-meta"><span>${escapeHtml(t("as_of", { date: meta.as_of }))}</span>${meta.reading_time ? `<span>${escapeHtml(meta.reading_time)}</span>` : ""}<span>${escapeHtml(t("theme_atom", { name: report.theme_atom?.name }))}</span></div>
       </div><div class="cover-media">
-        <div class="cover-stage" id="cover-stage" role="tabpanel" aria-live="polite" aria-labelledby="cover-tab-${escapeHtml(active.id)}" data-cover-mode="${escapeHtml(active.id)}">${renderCoverVisual(active)}</div>
+        <div class="cover-stage${renderer === "asset" ? " is-cover-loading" : ""}" id="cover-stage" role="tabpanel" aria-live="polite" aria-labelledby="cover-tab-${escapeHtml(active.id)}" aria-busy="${renderer === "asset" ? "true" : "false"}" data-cover-mode="${escapeHtml(active.id)}" data-cover-renderer="${renderer}" data-cover-ready="${coverReady}" data-cover-production="${escapeHtml(productionMode)}"${stageStyle}>${renderCoverVisual(active, { active: true })}</div>
         <div class="cover-switcher" role="tablist" aria-label="${escapeHtml(t("theme_atom", { name: report.theme_atom?.name }))}">
           ${views.map((view, index) => `<button id="cover-tab-${escapeHtml(view.id)}" type="button" role="tab" aria-controls="cover-stage" data-cover-view="${escapeHtml(view.id)}" aria-selected="${index === 0 ? "true" : "false"}" tabindex="${index === 0 ? "0" : "-1"}">${escapeHtml(view.label)}</button>`).join("")}
         </div>
@@ -699,19 +759,147 @@
   };
   setupHistoryScrolly();
 
-  const setCover = (viewId, focus = false) => {
-    const view = report.theme_atom.views.find((item) => item.id === viewId);
-    if (!view) return;
-    const stage = document.getElementById("cover-stage");
-    stage.dataset.coverMode = view.id;
-    stage.innerHTML = renderCoverVisual(view);
+  const coverStage = document.getElementById("cover-stage");
+  const coverViews = report.theme_atom?.views || [];
+  const reducedCoverMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  let coverRequest = 0;
+
+  const setCoverTabs = (view, focus = false, busy = false) => {
     document.querySelectorAll("[data-cover-view]").forEach((button) => {
       const selected = button.dataset.coverView === view.id;
       button.setAttribute("aria-selected", String(selected));
       button.tabIndex = selected ? 0 : -1;
-      if (selected) stage.setAttribute("aria-labelledby", button.id);
-      if (selected && focus) button.focus();
+      if (selected) {
+        coverStage.setAttribute("aria-labelledby", button.id);
+        if (busy) button.setAttribute("aria-busy", "true");
+        else button.removeAttribute("aria-busy");
+        if (focus) button.focus();
+      } else {
+        button.removeAttribute("aria-busy");
+      }
     });
+  };
+
+  const setCoverBusy = (view, busy) => {
+    coverStage.setAttribute("aria-busy", String(busy));
+    coverStage.dataset.coverReady = String(!busy);
+    document.documentElement.dataset.coverReady = String(!busy);
+    coverStage.classList.toggle("is-cover-loading", busy);
+    setCoverTabs(view, false, busy);
+  };
+
+  const coverVisualElement = (view, forceFallback = false) => {
+    const template = document.createElement("template");
+    template.innerHTML = renderCoverVisual(view, { forceFallback }).trim();
+    return template.content.firstElementChild;
+  };
+
+  const waitForCoverImage = async (image) => {
+    if (!(image instanceof HTMLImageElement)) throw new Error("cover asset did not produce an image element");
+    if (!image.complete) {
+      await new Promise((resolve, reject) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", () => reject(new Error("cover asset failed to load")), { once: true });
+      });
+    }
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error("cover asset decoded with empty dimensions");
+    if (typeof image.decode === "function") {
+      try { await image.decode(); } catch (_error) {
+        if (!image.complete || !image.naturalWidth) throw _error;
+      }
+    }
+    image.classList.add("is-ready");
+    image.dataset.coverDecoded = "true";
+    return image;
+  };
+
+  const settleCoverVisual = async (view, incoming, requestId) => {
+    if (requestId !== coverRequest) { incoming.remove(); return false; }
+    const previous = [...coverStage.querySelectorAll("[data-cover-visual].is-active")].filter((element) => element !== incoming);
+    coverStage.dataset.coverMode = view.id;
+    coverStage.dataset.coverRenderer = incoming.dataset.coverRenderer || "fallback";
+    coverStage.dataset.coverAssetError = incoming.dataset.coverRenderer === "asset" ? "false" : String(Boolean(view.asset));
+    incoming.setAttribute("aria-hidden", "false");
+    previous.forEach((element) => {
+      element.classList.remove("is-active");
+      element.classList.add("is-leaving");
+      element.setAttribute("aria-hidden", "true");
+    });
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    incoming.classList.add("is-active");
+    if (!reducedCoverMotion && previous.length) await new Promise((resolve) => window.setTimeout(resolve, 340));
+    previous.forEach((element) => element.remove());
+    if (requestId !== coverRequest) return false;
+    setCoverBusy(view, false);
+    return true;
+  };
+
+  const activateCover = async (view, focus = false) => {
+    if (!view || !coverStage) return false;
+    const current = coverStage.querySelector("[data-cover-visual].is-active");
+    if (current?.dataset.coverVisualId === view.id && coverStage.dataset.coverReady === "true") {
+      setCoverTabs(view, focus, false);
+      return true;
+    }
+
+    const requestId = ++coverRequest;
+    setCoverTabs(view, focus, true);
+    setCoverBusy(view, true);
+    coverStage.dataset.coverPending = view.id;
+    coverStage.querySelectorAll("[data-cover-visual].is-leaving").forEach((element) => element.remove());
+    let incoming = coverVisualElement(view);
+    if (!incoming) { setCoverBusy(view, false); return false; }
+    coverStage.append(incoming);
+
+    if (incoming.dataset.coverRenderer === "asset") {
+      try {
+        await waitForCoverImage(incoming.querySelector(".cover-image"));
+      } catch (_error) {
+        incoming.remove();
+        incoming = coverVisualElement(view, true);
+        if (!incoming) { setCoverBusy(view, false); return false; }
+        incoming.dataset.coverAssetError = "true";
+        coverStage.append(incoming);
+      }
+    }
+    const settled = await settleCoverVisual(view, incoming, requestId);
+    if (settled) delete coverStage.dataset.coverPending;
+    return settled;
+  };
+
+  const setupInitialCover = async () => {
+    const active = coverViews[0];
+    const visual = coverStage?.querySelector("[data-cover-visual].is-active");
+    if (!active || !coverStage || !visual) return false;
+    const initialRequest = coverRequest;
+    setCoverTabs(active, false, visual.dataset.coverRenderer === "asset");
+    if (visual.dataset.coverRenderer === "asset") {
+      try {
+        await waitForCoverImage(visual.querySelector(".cover-image"));
+      } catch (_error) {
+        if (coverRequest !== initialRequest) return false;
+        const fallback = coverVisualElement(active, true);
+        if (!fallback) return false;
+        fallback.classList.add("is-active");
+        fallback.setAttribute("aria-hidden", "false");
+        fallback.dataset.coverAssetError = "true";
+        visual.replaceWith(fallback);
+        coverStage.dataset.coverRenderer = fallback.dataset.coverRenderer || "fallback";
+        coverStage.dataset.coverAssetError = "true";
+      }
+    }
+    if (coverRequest !== initialRequest) return false;
+    setCoverBusy(active, false);
+    document.documentElement.dataset.coverReady = "true";
+    return true;
+  };
+
+  window.__VRR_COVER_READY__ = setupInitialCover();
+
+  const setCover = (viewId, focus = false) => {
+    const view = coverViews.find((item) => item.id === viewId);
+    if (!view) return Promise.resolve(false);
+    return activateCover(view, focus);
   };
 
   const setAppInert = (inert) => {
@@ -747,7 +935,7 @@
     const factTarget = event.target.closest("[data-fact-id]");
     if (factTarget) { event.preventDefault(); openDrawer(factTarget.dataset.factId, factTarget); return; }
     const coverButton = event.target.closest("[data-cover-view]");
-    if (coverButton) { setCover(coverButton.dataset.coverView); return; }
+    if (coverButton) { void setCover(coverButton.dataset.coverView); return; }
     if (event.target.closest("[data-close-drawer]")) closeDrawer();
   });
 
@@ -758,7 +946,7 @@
       const tabs = [...document.querySelectorAll("[data-cover-view]")];
       const index = tabs.indexOf(coverButton);
       const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
-      setCover(tabs[next].dataset.coverView, true);
+      void setCover(tabs[next].dataset.coverView, true);
       return;
     }
     const factTarget = event.target.closest?.("[data-fact-id]");

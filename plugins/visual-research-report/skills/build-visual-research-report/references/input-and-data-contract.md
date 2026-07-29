@@ -10,7 +10,7 @@ Compile the factual layer before touching presentation code. The minimum input i
 - `data_disclosure`: required for `mixed` and `synthetic`; provide `label`, `scope`, and placements such as `top-banner`, `methodology`, and `package-manifest`.
 - `presentation`: `preset` is `institutional-rail`, `editorial-longform`, or `editorial-scrollspy`; optional `reference_contract` records the supplied reference and measured geometry.
 - `ui_labels` (optional): string-to-string overrides for interface copy. The renderer supplies complete `en-US` and `zh-CN` dictionaries, selected from `meta.language`.
-- `theme_atom`: `name`, `description`, and exactly four `views` with IDs `recursive`, `exploded`, `blueprint`, and `impact`; optional `schematic` describes a reusable engineering-object fallback.
+- `theme_atom`: `name`, `description`, and exactly four `views` with IDs `recursive`, `exploded`, `blueprint`, and `impact`; `production` declares `image-2`, supplied, or schematic rendering; optional `identity_lock`, `camera_lock`, and `schematic` preserve one physical object across states.
 - `sources`: stable `Sxx` source records.
 - `facts`: stable `Fxx` quantitative records.
 - `kpis`: fact IDs used in the research rail.
@@ -111,9 +111,71 @@ Use `causal-horizon-map` when signals move through distinct time horizons with e
 
 The map visualizes an analytical causal hypothesis, not proof of causality. State that limitation in the chart note or methodology.
 
+## Image 2 cover production
+
+Use `theme_atom.production.mode: "image-2"` for generated production artwork. Image 2 generation happens before the offline build; the builder never calls an external image API. Freeze one canonical identity anchor and derive all four states as direct edits of that anchor:
+
+```json
+{
+  "identity_lock": {
+    "object_key": "chip-package-v1",
+    "physical_class": "assembled 2.5D semiconductor package",
+    "silhouette": "low rectangular substrate with one clipped corner",
+    "part_ids": ["substrate", "interposer", "compute", "memory-a", "memory-b"],
+    "topology": ["compute and memory on interposer", "interposer on substrate"],
+    "materials": ["graphite silicon", "navy memory", "green-black substrate", "copper routing"],
+    "fiducials": ["one clipped lower-left corner", "six gold near-edge pads"]
+  },
+  "camera_lock": {
+    "projection": "orthographic-like three-quarter product view",
+    "yaw_deg": 35,
+    "pitch_deg": 27,
+    "roll_deg": 0,
+    "focal_length_equiv_mm": 85,
+    "object_center": [0.5, 0.51],
+    "safe_margin": 0.1
+  },
+  "production": {
+    "mode": "image-2",
+    "model": "gpt-image-2",
+    "workflow": "canonical-anchor-plus-direct-edits",
+    "anchor_asset": "theme-atom/identity-anchor.png",
+    "prompt_version": "atom-cover-v1",
+    "canvas": {"width": 1448, "height": 1086},
+    "master_format": "png",
+    "delivery_format": "webp",
+    "print_view_id": "recursive",
+    "fallback": "schematic-explicit-only"
+  }
+}
+```
+
+Each `image-2` or `provided` view adds `asset`, a required normalized `focal_point`, and generation provenance. `focal_point` may be omitted only in `schematic` mode:
+
+```json
+{
+  "id": "exploded",
+  "label": "Exploded assembly",
+  "alt": "The same package separated along its real assembly order.",
+  "asset": "theme-atom/exploded.png",
+  "focal_point": [0.5, 0.5],
+  "generation": {
+    "operation": "edit",
+    "parent_asset": "theme-atom/identity-anchor.png",
+    "prompt_id": "atom-cover-v1/exploded",
+    "invariants": ["identity_lock", "camera_lock"],
+    "qa_status": "passed",
+    "input_asset_sha256": "<sha256>",
+    "output_asset_sha256": "<sha256>"
+  }
+}
+```
+
+Image 2 mode is strict. The anchor and four state assets must be distinct, decodable local images inside the report directory. Remote URLs, data URIs, absolute paths and parent-directory traversal are invalid. All five files share one canvas/aspect ratio; every state preserves the declared identity and camera locks. Missing or rejected production imagery is an error, not permission to switch rendering modes. Keep full prompts in a generation sidecar when auditability matters; the data contract may retain stable prompt IDs and hashes.
+
 ## Engineering schematic fallback
 
-When cover images are unavailable, `theme_atom.schematic` may define the physical object once and reuse it in every cover state:
+When Image 2 is unavailable or the user explicitly selects an offline deterministic cover, set `theme_atom.production.mode: "schematic"`. Then `theme_atom.schematic` may define the physical object once and reuse it in every cover state:
 
 ```json
 {

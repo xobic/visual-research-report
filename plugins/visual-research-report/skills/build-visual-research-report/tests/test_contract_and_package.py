@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -136,6 +137,61 @@ class ContractTests(unittest.TestCase):
             },
         }
 
+    def with_image2_theme_atom(self, report: dict) -> dict:
+        atom = report["theme_atom"]
+        part_ids = [part["id"] for part in atom["schematic"]["parts"]]
+        anchor = "theme-atom-image2/identity-anchor.png"
+        atom["production"] = {
+            "mode": "image-2",
+            "model": "gpt-image-2",
+            "workflow": "canonical-anchor-plus-direct-edits",
+            "anchor_asset": anchor,
+            "prompt_version": "atom-cover-v1",
+            "canvas": {"width": 1448, "height": 1086},
+            "master_format": "png",
+            "delivery_format": "webp",
+            "print_view_id": "recursive",
+            "fallback": "schematic-explicit-only",
+        }
+        atom["identity_lock"] = {
+            "object_key": "chip-package-2-5d",
+            "physical_class": "2.5D semiconductor package",
+            "silhouette": "low rectangular package with one compute die and two memory stacks",
+            "part_ids": part_ids,
+            "topology": ["compute-to-interposer", "memory-to-interposer", "interposer-to-substrate"],
+            "materials": ["silicon", "copper", "epoxy"],
+            "fiducials": ["offset compute die", "paired memory stacks"],
+        }
+        atom["camera_lock"] = {
+            "projection": "three-quarter orthographic",
+            "yaw_deg": 32,
+            "pitch_deg": 24,
+            "roll_deg": 0,
+            "focal_length_equiv_mm": 70,
+            "object_center": [0.5, 0.5],
+            "safe_margin": 0.12,
+        }
+        output_digests = {
+            "recursive": "b" * 64,
+            "exploded": "c" * 64,
+            "blueprint": "d" * 64,
+            "impact": "e" * 64,
+        }
+        for view in atom["views"]:
+            view_id = view["id"]
+            view["asset"] = f"theme-atom-image2/{view_id}.png"
+            view["focal_point"] = [0.5, 0.5]
+            view["generation"] = {
+                "operation": "edit",
+                "parent_asset": anchor,
+                "prompt_id": f"atom-cover-v1/{view_id}",
+                "invariants": ["identity_lock", "camera_lock"],
+                "qa_status": "passed",
+                "input_asset_sha256": "a" * 64,
+                "output_asset_sha256": output_digests[view_id],
+            }
+        return report
+
     def test_v2_example_is_strictly_valid(self) -> None:
         errors, warnings = validate_report(self.example)
         self.assertEqual([], errors)
@@ -161,7 +217,15 @@ class ContractTests(unittest.TestCase):
 
     def test_optional_theme_atom_schematic_is_valid(self) -> None:
         report = self.mutate()
-        report["theme_atom"]["schematic"] = {
+        atom = report["theme_atom"]
+        atom.pop("production", None)
+        atom.pop("identity_lock", None)
+        atom.pop("camera_lock", None)
+        for view in atom["views"]:
+            view.pop("asset", None)
+            view.pop("focal_point", None)
+            view.pop("generation", None)
+        atom["schematic"] = {
             "view_box": [1200, 800],
             "parts": [
                 {"id": "substrate", "label": "Substrate", "shape": "rect", "x": 10, "y": 55, "width": 80, "height": 20, "role": "shell"},
@@ -176,6 +240,215 @@ class ContractTests(unittest.TestCase):
         errors, warnings = validate_report(report)
         self.assertEqual([], errors)
         self.assertEqual([], warnings)
+
+    def test_image2_theme_atom_production_contract_is_valid(self) -> None:
+        report = self.with_image2_theme_atom(self.mutate())
+        errors, warnings = validate_report(report)
+        self.assertEqual([], errors)
+        self.assertEqual([], warnings)
+
+    def test_explicit_provided_and_schematic_production_modes_are_valid(self) -> None:
+        provided = self.mutate()
+        provided_atom = provided["theme_atom"]
+        provided_atom["production"] = {
+            "mode": "provided",
+            "canvas": {"width": 1448, "height": 1086},
+            "print_view_id": "recursive",
+        }
+        for view in provided_atom["views"]:
+            view["asset"] = f"provided/{view['id']}.png"
+            view["focal_point"] = [0.5, 0.5]
+            view.pop("generation", None)
+        errors, warnings = validate_report(provided)
+        self.assertEqual([], errors)
+        self.assertEqual([], warnings)
+
+        schematic = self.mutate()
+        schematic["theme_atom"]["production"] = {"mode": "schematic"}
+        for view in schematic["theme_atom"]["views"]:
+            view.pop("asset", None)
+            view.pop("focal_point", None)
+            view.pop("generation", None)
+        errors, warnings = validate_report(schematic)
+        self.assertEqual([], errors)
+        self.assertEqual([], warnings)
+
+    def test_theme_atom_production_rejects_unsafe_asset_paths(self) -> None:
+        mutations = {
+            "remote view asset": (
+                "remote, data, and absolute paths are forbidden",
+                lambda report: report["theme_atom"]["views"][0].update(asset="https://example.com/recursive.webp"),
+            ),
+            "data URI view asset": (
+                "remote, data, and absolute paths are forbidden",
+                lambda report: report["theme_atom"]["views"][0].update(asset="data:image/webp;base64,AAAA"),
+            ),
+            "remote contact sheet": (
+                "production.contact_sheet_asset must be a safe relative local image path",
+                lambda report: report["theme_atom"]["production"].update(contact_sheet_asset="ftp://example.com/contact.png"),
+            ),
+            "absolute anchor asset": (
+                "remote, data, and absolute paths are forbidden",
+                lambda report: report["theme_atom"]["production"].update(anchor_asset="/tmp/anchor.png"),
+            ),
+            "parent traversal": (
+                "must not contain '..' path traversal",
+                lambda report: report["theme_atom"]["views"][0].update(asset="../recursive.webp"),
+            ),
+            "duplicate output asset": (
+                "duplicates theme_atom.views[0].asset",
+                lambda report: report["theme_atom"]["views"][1].update(asset="theme-atom-image2/recursive.png"),
+            ),
+            "missing output asset": (
+                ".asset must be a non-empty safe relative local image path",
+                lambda report: report["theme_atom"]["views"][0].pop("asset"),
+            ),
+        }
+        for label, (fragment, mutate_report) in mutations.items():
+            with self.subTest(label=label):
+                report = self.with_image2_theme_atom(self.mutate())
+                mutate_report(report)
+                self.assert_error_contains(report, fragment)
+
+    def test_image2_theme_atom_rejects_broken_generation_continuity(self) -> None:
+        mutations = {
+            "missing canonical view": (
+                "theme_atom.views must contain exactly",
+                lambda report: report["theme_atom"].update(views=report["theme_atom"]["views"][:-1]),
+            ),
+            "non-canonical view id": (
+                "theme_atom.views must contain exactly",
+                lambda report: report["theme_atom"]["views"][0].update(id="hero"),
+            ),
+            "unknown mode": (
+                "production.mode must be one of",
+                lambda report: report["theme_atom"]["production"].update(mode="imagegen"),
+            ),
+            "wrong model": (
+                "production.model must be 'gpt-image-2'",
+                lambda report: report["theme_atom"]["production"].update(model="gpt-image-1"),
+            ),
+            "wrong workflow": (
+                "production.workflow must be 'canonical-anchor-plus-direct-edits'",
+                lambda report: report["theme_atom"]["production"].update(workflow="four-independent-generations"),
+            ),
+            "wrong master format": (
+                "production.master_format must be 'png'",
+                lambda report: report["theme_atom"]["production"].update(master_format="jpeg"),
+            ),
+            "wrong delivery format": (
+                "production.delivery_format must be 'webp'",
+                lambda report: report["theme_atom"]["production"].update(delivery_format="png"),
+            ),
+            "invalid canvas": (
+                "production.canvas.width must be a positive integer",
+                lambda report: report["theme_atom"]["production"]["canvas"].update(width=0),
+            ),
+            "invalid print view": (
+                "production.print_view_id must be one of",
+                lambda report: report["theme_atom"]["production"].update(print_view_id="hero"),
+            ),
+            "invalid fallback": (
+                "production.fallback must be 'schematic-explicit-only'",
+                lambda report: report["theme_atom"]["production"].update(fallback="generic-art"),
+            ),
+            "invalid focal point": (
+                ".focal_point must contain exactly two finite numbers between 0 and 1",
+                lambda report: report["theme_atom"]["views"][0].update(focal_point=[0.5, 1.1]),
+            ),
+            "wrong master extension": (
+                ".asset extension must match theme_atom.production.master_format 'png'",
+                lambda report: report["theme_atom"]["views"][0].update(asset="theme-atom-image2/recursive.webp"),
+            ),
+            "missing generation": (
+                ".generation must be an object for image-2 production",
+                lambda report: report["theme_atom"]["views"][0].pop("generation"),
+            ),
+            "non-edit operation": (
+                ".generation.operation must be 'edit'",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(operation="generate"),
+            ),
+            "different parent": (
+                ".generation.parent_asset must equal theme_atom.production.anchor_asset",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(parent_asset="theme-atom-image2/other.png"),
+            ),
+            "prompt discontinuity": (
+                ".generation.prompt_id must be 'atom-cover-v1/recursive'",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(prompt_id="other/recursive"),
+            ),
+            "missing invariant": (
+                ".generation.invariants must contain exactly",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(invariants=["identity_lock"]),
+            ),
+            "qa not passed": (
+                ".generation.qa_status must be 'passed'",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(qa_status="pending"),
+            ),
+            "invalid input digest": (
+                ".generation.input_asset_sha256 must be a lowercase 64-character SHA-256",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(input_asset_sha256="ABC"),
+            ),
+            "different input anchor digest": (
+                "input_asset_sha256 values must all identify the same canonical anchor",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(input_asset_sha256="f" * 64),
+            ),
+            "duplicate output digest": (
+                ".generation.output_asset_sha256 duplicates",
+                lambda report: report["theme_atom"]["views"][1]["generation"].update(output_asset_sha256="b" * 64),
+            ),
+            "unchanged output digest": (
+                ".generation.output_asset_sha256 must differ from its anchor input digest",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(output_asset_sha256="a" * 64),
+            ),
+            "inconsistent generation canvas": (
+                ".generation.canvas must match theme_atom.production.canvas",
+                lambda report: report["theme_atom"]["views"][0]["generation"].update(canvas={"width": 1024, "height": 1024}),
+            ),
+        }
+        for label, (fragment, mutate_report) in mutations.items():
+            with self.subTest(label=label):
+                report = self.with_image2_theme_atom(self.mutate())
+                mutate_report(report)
+                self.assert_error_contains(report, fragment)
+
+    def test_image2_theme_atom_rejects_broken_identity_and_camera_locks(self) -> None:
+        mutations = {
+            "identity lock missing": (
+                "theme_atom.identity_lock must be an object",
+                lambda report: report["theme_atom"].pop("identity_lock"),
+            ),
+            "unknown canonical part": (
+                "part_ids references unknown schematic parts",
+                lambda report: report["theme_atom"]["identity_lock"]["part_ids"].append("invented-part"),
+            ),
+            "canonical part omitted": (
+                "part_ids must include every canonical schematic part",
+                lambda report: report["theme_atom"]["identity_lock"].update(
+                    part_ids=report["theme_atom"]["identity_lock"]["part_ids"][:-1]
+                ),
+            ),
+            "insufficient fiducials": (
+                "identity_lock.fiducials must contain at least 2 non-empty strings",
+                lambda report: report["theme_atom"]["identity_lock"].update(fiducials=["one marker"]),
+            ),
+            "camera lock missing": (
+                "theme_atom.camera_lock must be an object",
+                lambda report: report["theme_atom"].pop("camera_lock"),
+            ),
+            "invalid object center": (
+                "camera_lock.object_center must contain exactly two finite numbers between 0 and 1",
+                lambda report: report["theme_atom"]["camera_lock"].update(object_center=[-0.1, 0.5]),
+            ),
+            "invalid safe margin": (
+                "camera_lock.safe_margin must be a finite number between 0 and 0.4",
+                lambda report: report["theme_atom"]["camera_lock"].update(safe_margin=0.5),
+            ),
+        }
+        for label, (fragment, mutate_report) in mutations.items():
+            with self.subTest(label=label):
+                report = self.with_image2_theme_atom(self.mutate())
+                mutate_report(report)
+                self.assert_error_contains(report, fragment)
 
     def test_theme_atom_schematic_rejects_invalid_contracts(self) -> None:
         def schematic() -> dict:
@@ -300,6 +573,7 @@ class PackageTests(unittest.TestCase):
             root = Path(temporary)
             report_path = root / "fixture.json"
             output = root / "output"
+            shutil.copytree(SKILL_DIR / "assets" / "theme-atom-image2", root / "theme-atom-image2")
             report_path.write_text(json.dumps(source, ensure_ascii=False, indent=2), encoding="utf-8")
             build(report_path, output)
             errors, _ = run_qa(output)
@@ -320,6 +594,7 @@ class PackageTests(unittest.TestCase):
             report_path = root / "fixture.json"
             output = root / "output"
             fake_browser = root / "not-a-browser"
+            shutil.copytree(SKILL_DIR / "assets" / "theme-atom-image2", root / "theme-atom-image2")
             report_path.write_text(json.dumps(source, ensure_ascii=False), encoding="utf-8")
             fake_browser.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
             fake_browser.chmod(0o755)

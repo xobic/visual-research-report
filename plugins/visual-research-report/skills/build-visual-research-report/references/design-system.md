@@ -22,6 +22,10 @@ Read [editorial-longform.md](editorial-longform.md) for reference measurement, p
 
 The four cover tabs show the same real object as recursive system, exploded physical view, engineering blueprint, and impact/unboxing moment. Tabs use `role=tab`, matching tabpanels, roving `tabindex`, ArrowLeft/ArrowRight and Home/End. The active view is never conveyed by color alone. Honor reduced motion.
 
+Production raster covers use Image 2 with a canonical identity anchor plus four direct edits. Lock the object's silhouette, declared parts, topology, material language, fiducials, camera and safe area before generating states. The recursive view repeats exact copies; the exploded view separates only real declared parts; the blueprint changes rendering treatment without inventing pseudo-labels; the impact view changes the arrival context without deforming the assembled object. Do not accept a state with extra parts, missing parts, mirrored orientation, camera reversal, text, logos or watermarks.
+
+Use a restrained crossfade/scale transition between decoded assets and remove it under reduced motion. Respect each view's normalized focal point; blueprint may use `contain` against its declared field while product states use crop-safe `cover`. The engineering SVG renderer remains a complete explicit fallback, not the silent renderer for a missing Image 2 file.
+
 ## Evidence interaction
 
 - KPI tiles, fact chips, chart marks, and table cells open one dark evidence drawer.

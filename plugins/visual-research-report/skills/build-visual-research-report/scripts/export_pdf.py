@@ -34,6 +34,59 @@ def _find_browser(explicit: Path | None) -> Path | None:
     return None
 
 
+def _cover_assets_require_wait(output: Path) -> bool:
+    report_path = output / "report.json"
+    if not report_path.is_file():
+        return False
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    atom = report.get("theme_atom") if isinstance(report, dict) else None
+    if not isinstance(atom, dict):
+        return False
+    production = atom.get("production") if isinstance(atom.get("production"), dict) else {}
+    views = atom.get("views") if isinstance(atom.get("views"), list) else []
+    return production.get("mode") == "image-2" or any(isinstance(view, dict) and view.get("asset") for view in views)
+
+
+def _wait_for_cover_ready(browser: Path, profile: str, document_uri: str) -> tuple[bool, str]:
+    """Warm the report in Chromium and wait for a stable composited frame before print."""
+    ready_frame = Path(profile) / "cover-ready.png"
+    command = [
+        str(browser), "--headless=new", "--disable-gpu", "--no-first-run",
+        "--disable-background-networking", "--allow-file-access-from-files",
+        "--run-all-compositor-stages-before-draw", "--hide-scrollbars", "--window-size=1440,1000",
+        f"--user-data-dir={profile}", "--virtual-time-budget=12000",
+        f"--screenshot={ready_frame}", document_uri,
+    ]
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    deadline = time.monotonic() + 30
+    last_size = -1
+    stable_checks = 0
+    terminated_after_write = False
+    while process.poll() is None and time.monotonic() < deadline:
+        if ready_frame.is_file() and ready_frame.stat().st_size > 1024:
+            size = ready_frame.stat().st_size
+            stable_checks = stable_checks + 1 if size == last_size else 0
+            last_size = size
+            if stable_checks >= 3 and ready_frame.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n":
+                terminated_after_write = True
+                process.terminate()
+                break
+        time.sleep(0.2)
+    try:
+        stdout, stderr = process.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        stdout, stderr = process.communicate()
+    valid_frame = ready_frame.is_file() and ready_frame.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    if valid_frame and (not process.returncode or terminated_after_write):
+        return True, ""
+    detail = stderr or stdout or "cover image did not reach a stable composited frame before PDF export"
+    return False, str(detail).strip()[-1000:]
+
+
 def export_pdf(output: Path, browser: Path | None, optional: bool) -> dict[str, object]:
     html_path = output / "report.html"
     pdf_path = output / "report.pdf"
@@ -55,10 +108,22 @@ def export_pdf(output: Path, browser: Path | None, optional: bool) -> dict[str, 
 
     with tempfile.TemporaryDirectory(prefix="vrr-pdf-") as profile:
         temporary_pdf = Path(profile) / "report.pdf"
+        document_uri = html_path.resolve().as_uri()
+        if _cover_assets_require_wait(output):
+            cover_ready, cover_detail = _wait_for_cover_ready(selected, profile, document_uri)
+            if not cover_ready:
+                result["status"] = "skipped" if optional else "failed"
+                result["detail"] = cover_detail
+                result["reason"] = "browser-environment-unavailable" if optional else "cover-image-not-ready"
+                status_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                if optional:
+                    return result
+                raise ValueError(f"PDF export stopped before print because the cover was not ready: {cover_detail}")
         command = [
             str(selected), "--headless=new", "--disable-gpu", "--no-first-run",
-            f"--user-data-dir={profile}", "--virtual-time-budget=4000",
-            "--no-pdf-header-footer", f"--print-to-pdf={temporary_pdf}", html_path.resolve().as_uri(),
+            "--allow-file-access-from-files", "--run-all-compositor-stages-before-draw",
+            f"--user-data-dir={profile}", "--virtual-time-budget=8000",
+            "--no-pdf-header-footer", f"--print-to-pdf={temporary_pdf}", document_uri,
         ]
         timed_out = False
         terminated_after_write = False
