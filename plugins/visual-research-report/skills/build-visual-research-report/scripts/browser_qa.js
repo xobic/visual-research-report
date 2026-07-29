@@ -36,6 +36,16 @@ async page => {
       const representative = page.locator('.chart-plate').first();
       await representative.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-chart.png` });
       screenshots += 1;
+      const historyPlate = page.locator('[data-chart-type="history-scrolly"]').first();
+      if (await historyPlate.count()) {
+        await historyPlate.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-history.png` });
+        screenshots += 1;
+      }
+      const causalPlate = page.locator('[data-chart-type="causal-horizon-map"]').first();
+      if (await causalPlate.count()) {
+        await causalPlate.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-causal.png` });
+        screenshots += 1;
+      }
       const matrix = page.locator('[data-contained-overflow="true"]').first();
       if (await matrix.count()) {
         await matrix.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-matrix.png` });
@@ -45,8 +55,8 @@ async page => {
       const geometry = await page.evaluate(() => {
         const rail = document.querySelector('.research-rail');
         const firstSection = document.querySelector('.report-section');
-        const touchSelectors = '.fact-chip,.cover-switcher button,.drawer-close,.rail-nav a,.flow-link,.pair-control,.pair-multiplier,.heat-cell,.odds-card,.entity-period,.line-mark,.balance-weight,.tripwire';
-        const allowedOverflow = element => element.closest?.('.matrix-wrap,.line-wrap,.flow-grid');
+        const touchSelectors = '.fact-chip,.cover-switcher button,.drawer-close,.rail-nav a,.flow-link,.pair-control,.pair-multiplier,.heat-cell,.odds-card,.entity-period,.line-mark,.balance-weight,.tripwire,.history-mark,.history-scene-trigger,.history-annotation-fact,.causal-fact,.causal-sparkline-mark';
+        const allowedOverflow = element => element.closest?.('.matrix-wrap,.line-wrap,.flow-grid,.history-stage,.causal-horizon-map,.rail-nav');
         const escapedElements = [...document.querySelectorAll('body *')].filter(element => {
           if (allowedOverflow(element) || element.closest?.('[hidden]')) return false;
           const style = getComputedStyle(element);
@@ -62,7 +72,14 @@ async page => {
           railTop: rail?.getBoundingClientRect().top ?? null,
           firstTop: firstSection?.getBoundingClientRect().top ?? null,
           railPosition: rail ? getComputedStyle(rail).position : null,
+          railTopCss: rail ? getComputedStyle(rail).top : null,
+          railNavScroll: document.querySelector('.rail-nav') ? {
+            width: document.querySelector('.rail-nav').clientWidth,
+            scrollWidth: document.querySelector('.rail-nav').scrollWidth,
+          } : null,
           coverTabs: document.querySelectorAll('[role="tab"]').length,
+          schematicParts: document.querySelectorAll('#cover-stage .schematic-parts [data-part-id]').length,
+          coverAnimations: [...document.querySelectorAll('#cover-stage .atom-part')].map(part => getComputedStyle(part).animationName),
           chartCount: document.querySelectorAll('[data-chart-type]').length,
           disclosure: !!document.querySelector('.data-disclosure'),
           smallTargets: [...document.querySelectorAll(touchSelectors)].filter(element => {
@@ -84,20 +101,56 @@ async page => {
             withinViewport: wrap.getBoundingClientRect().left >= -1 && wrap.getBoundingClientRect().right <= innerWidth + 1,
           })),
           sourceAnchors: [...document.querySelectorAll('.chart-source a')].every(anchor => !!document.querySelector(anchor.getAttribute('href'))),
+          histories: [...document.querySelectorAll('[data-history-scrolly]')].map(root => {
+            const chart = root.querySelector('.history-chart');
+            return {
+              mode: root.dataset.historyMode,
+              scenes: root.querySelectorAll('[data-scrolly-step]').length,
+              activeScenes: root.querySelectorAll('[data-scrolly-step][aria-current="true"]').length,
+              focusStart: chart?.dataset.focusStart || '',
+              focusEnd: chart?.dataset.focusEnd || '',
+            };
+          }),
+          causalNodes: [...document.querySelectorAll('.causal-node[data-node-id]')].map(node => ({
+            id: node.dataset.nodeId,
+            direction: node.dataset.direction,
+            confidence: node.dataset.confidence,
+            sparkline: !!node.querySelector('.causal-sparkline'),
+          })),
         };
       });
       assert(geometry.lang.length > 0, `${label}: document language missing`);
-      assert(['editorial-longform', 'institutional-rail'].includes(geometry.preset), `${label}: unknown design preset`);
+      assert(['editorial-longform', 'editorial-scrollspy', 'institutional-rail'].includes(geometry.preset), `${label}: unknown design preset`);
       assert(geometry.overflow <= 1, `${label}: document overflows horizontally by ${geometry.overflow}px`);
       assert(geometry.escapedElements.length === 0, `${label}: elements escape viewport: ${geometry.escapedElements.join(', ')}`);
       assert(geometry.coverTabs === 4, `${label}: expected four cover tabs, found ${geometry.coverTabs}`);
+      assert(geometry.schematicParts >= 2, `${label}: engineering cover schematic did not render`);
+      assert(geometry.coverAnimations.every(name => name === 'none'), `${label}: cover animation remains active under reduced motion`);
       assert(geometry.chartCount > 0, `${label}: no charts rendered`);
       assert(geometry.disclosure, `${label}: synthetic disclosure missing`);
       assert(geometry.smallTargets.length === 0, `${label}: touch targets below 40px: ${geometry.smallTargets.join(', ')}`);
       assert(geometry.duplicateChartFacts.length === 0, `${label}: duplicate chart fact controls: ${geometry.duplicateChartFacts.join(', ')}`);
       assert(geometry.sourceAnchors, `${label}: chart source anchor does not resolve`);
-      if (viewport.width < 1100) assert(geometry.railTop < geometry.firstTop, `${label}: directory/rail does not precede report body`);
+      if (viewport.width < 1100 && geometry.preset !== 'editorial-scrollspy') assert(geometry.railTop < geometry.firstTop, `${label}: directory/rail does not precede report body`);
       if (geometry.preset === 'editorial-longform' && viewport.width >= 1100) assert(geometry.railPosition !== 'sticky', `${label}: editorial directory must not be sticky`);
+      if (geometry.preset === 'editorial-scrollspy') {
+        assert(geometry.railPosition === 'sticky', `${label}: editorial chapter track is not sticky`);
+        assert(geometry.railTopCss === '0px', `${label}: editorial chapter track does not pin to the viewport top`);
+        assert(geometry.railNavScroll && geometry.railNavScroll.scrollWidth >= geometry.railNavScroll.width, `${label}: chapter track scroll geometry is invalid`);
+      }
+      assert(geometry.histories.length > 0, `${label}: history-scrolly did not render`);
+      geometry.histories.forEach((history, index) => {
+        assert(history.mode === 'static', `${label}: history ${index} did not enter reduced-motion static mode`);
+        assert(history.scenes >= 2, `${label}: history ${index} lacks ordered scenes`);
+        assert(history.activeScenes === 1, `${label}: history ${index} must expose exactly one current scene`);
+        assert(history.focusStart && history.focusEnd, `${label}: history ${index} lacks a focus domain`);
+      });
+      assert(geometry.causalNodes.length >= 2, `${label}: causal horizon nodes did not render`);
+      geometry.causalNodes.forEach((node, index) => {
+        assert(['up', 'down', 'mixed'].includes(node.direction), `${label}: causal node ${index} lacks textual direction`);
+        assert(['low', 'medium', 'high'].includes(node.confidence), `${label}: causal node ${index} lacks textual confidence`);
+        assert(node.sparkline, `${label}: causal node ${index} lacks a sparkline`);
+      });
       geometry.matrixRegions.forEach((region, index) => {
         assert(region.contained, `${label}: matrix ${index} has invalid contained-overflow geometry`);
         assert(region.withinViewport, `${label}: matrix ${index} escapes the viewport`);
@@ -111,18 +164,24 @@ async page => {
 
       const firstTab = page.locator('[role="tab"]').first();
       const initialMode = await coverStage.getAttribute('data-cover-mode');
+      const initialPartCount = await coverStage.locator('.schematic-parts [data-part-id]').count();
       await firstTab.focus();
       await page.keyboard.press('ArrowRight');
       const activeTab = page.locator('[role="tab"][aria-selected="true"]');
       assert(await activeTab.getAttribute('tabindex') === '0', `${label}: cover roving tabindex failed`);
       assert(await coverStage.getAttribute('data-cover-mode') !== initialMode, `${label}: cover stage did not change with keyboard navigation`);
+      assert(await coverStage.locator('.schematic-parts [data-part-id]').count() === initialPartCount, `${label}: cover mode changed the physical schematic parts`);
 
       const nav = page.locator('.rail-nav a').first();
       const href = await nav.getAttribute('href');
       await nav.click();
       assert((await page.evaluate(() => location.hash)) === href, `${label}: directory link did not update the anchor`);
+      if (geometry.preset === 'editorial-scrollspy') {
+        await page.waitForTimeout(120);
+        assert(await nav.evaluate(element => element.classList.contains('is-active')), `${label}: chapter scrollspy did not activate the selected section`);
+      }
 
-      const trigger = page.locator('.kpi[data-fact-id],.fact-chip[data-fact-id],[data-chart-type] [data-fact-id]').first();
+      const trigger = page.locator('.kpi[data-fact-id]:visible,.fact-chip[data-fact-id]:visible,[data-chart-type] [data-fact-id]:visible').first();
       await trigger.scrollIntoViewIfNeeded();
       await trigger.focus();
       const triggerFact = await trigger.getAttribute('data-fact-id');
@@ -164,6 +223,17 @@ async page => {
       await page.locator('#drawer-scrim').click({ position: { x: 4, y: 4 } });
       assert(await drawer.isHidden(), `${label}: scrim did not close drawer`);
     }
+  }
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(`${baseUrl}/site/index.html`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#cover-stage .atom-engineering-svg');
+  for (const mode of ['recursive', 'exploded', 'blueprint', 'impact']) {
+    await page.locator(`[data-cover-view="${mode}"]`).click();
+    await page.waitForTimeout(mode === 'recursive' ? 650 : mode === 'exploded' ? 900 : 520);
+    await page.locator('#cover-stage').screenshot({ path: `${artifactDir}/site-desktop-cover-${mode}-motion.png` });
+    screenshots += 1;
   }
   assert(consoleErrors.length === 0, `browser errors: ${consoleErrors.join(' | ')}`);
   if (failures.length) throw new Error(`Visual Research Report browser QA failed:\n${failures.join('\n')}`);

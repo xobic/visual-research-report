@@ -8,9 +8,9 @@ Compile the factual layer before touching presentation code. The minimum input i
 - `meta`: `title`, `subtitle`, `kicker`, `publisher`, `as_of`, `language`, and `summary`.
 - `evidence_status`: `verified`, `mixed`, or `synthetic`.
 - `data_disclosure`: required for `mixed` and `synthetic`; provide `label`, `scope`, and placements such as `top-banner`, `methodology`, and `package-manifest`.
-- `presentation`: `preset` is `institutional-rail` or `editorial-longform`; optional `reference_contract` records the supplied reference and measured geometry.
+- `presentation`: `preset` is `institutional-rail`, `editorial-longform`, or `editorial-scrollspy`; optional `reference_contract` records the supplied reference and measured geometry.
 - `ui_labels` (optional): string-to-string overrides for interface copy. The renderer supplies complete `en-US` and `zh-CN` dictionaries, selected from `meta.language`.
-- `theme_atom`: `name`, `description`, and exactly four `views` with IDs `recursive`, `exploded`, `blueprint`, and `impact`.
+- `theme_atom`: `name`, `description`, and exactly four `views` with IDs `recursive`, `exploded`, `blueprint`, and `impact`; optional `schematic` describes a reusable engineering-object fallback.
 - `sources`: stable `Sxx` source records.
 - `facts`: stable `Fxx` quantitative records.
 - `kpis`: fact IDs used in the research rail.
@@ -88,9 +88,49 @@ For `line`, series names and optional colors must be unique. Referenced facts mu
 
 Every displayed numeric mark must resolve to one fact. Matrix scores, tripwires, balance weights, paired values, derived multipliers, odds, and table cells are never exempt. A decorative shape may omit a fact only when it contains no visible number.
 
+### Scroll-driven history
+
+Use `history-scrolly` when the reader must understand regimes or phases rather than inspect one static trend. Its `data` contains:
+
+- an `actual` scale;
+- one or more uniquely named series, each with at least two `{ "label", "value", "fact_id" }` points;
+- at least two ordered scenes with unique `id`, `title`, `start_label`, and `end_label` values that resolve to labels in the first series;
+- optional scene `body` and `annotation_fact_ids`.
+
+Scenes select a focus window; they do not create new data. Reduced-motion and print output show the complete history while keeping every scene explanation readable.
+
+### Causal-horizon map
+
+Use `causal-horizon-map` when signals move through distinct time horizons with explicit direction, lag, threshold, and evidence strength. Its `data` contains:
+
+- at least two unique horizons `{ "id", "label" }`;
+- at least two nodes with unique `id`, `label`, `horizon_id`, `direction` (`up`, `down`, or `mixed`), `confidence` (`low`, `medium`, or `high`), and `signal_fact_id`;
+- optional `lag_fact_id` and `threshold_fact_id` rather than untraceable numeric strings;
+- a node sparkline with an actual scale and at least two fact-bound points;
+- at least one directed edge whose `from` and `to` resolve to different nodes.
+
+The map visualizes an analytical causal hypothesis, not proof of causality. State that limitation in the chart note or methodology.
+
+## Engineering schematic fallback
+
+When cover images are unavailable, `theme_atom.schematic` may define the physical object once and reuse it in every cover state:
+
+```json
+{
+  "view_box": [100, 100],
+  "parts": [
+    {"id":"substrate","label":"Substrate","shape":"rect","x":12,"y":62,"width":76,"height":18,"role":"shell"},
+    {"id":"die","label":"Compute die","shape":"rect","x":34,"y":32,"width":32,"height":24,"role":"core"}
+  ],
+  "connections": [{"from":"die","to":"substrate"}]
+}
+```
+
+Use two to twelve unique parts. Part coordinates are normalized from 0 to 100; `view_box` declares the positive SVG output extent. Shapes are limited to safe `rect` and `circle` primitives. Roles are `shell`, `core`, `interface`, or `detail`. The renderer owns recursive depth, exploded separation, blueprint drawing, and impact motion so authored geometry remains one object rather than four unrelated illustrations.
+
 ## Presentation and reference contract
 
-Use `presentation.preset: "editorial-longform"` for a flat research-paper page. The preset fixes the 1440px page, 1120px chart plate, and 720px prose measures and disables a persistent desktop rail. Use `institutional-rail` when the research dashboard is part of the reading task.
+Use `presentation.preset: "editorial-longform"` for a flat research-paper page. Use `editorial-scrollspy` when the same 1440px page, 1120px chart plate, and 720px prose measures need a sticky segmented chapter track. Use `institutional-rail` when a persistent KPI dashboard is part of the reading task.
 
 If the user supplies a screenshot or brand target, record it without turning pixel dimensions into arbitrary design knobs:
 

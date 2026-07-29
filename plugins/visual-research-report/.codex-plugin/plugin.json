@@ -1,11 +1,13 @@
 {
   "name": "visual-research-report",
-  "version": "0.3.0",
-  "description": "Turn source reports into traceable editorial research websites and offline deliverables.",
+  "version": "0.4.0",
+  "description": "Turn source reports into traceable, scroll-driven editorial research websites and offline deliverables.",
   "author": {
     "name": "Gao"
   },
   "license": "MIT",
+  "homepage": "https://github.com/xobic/visual-research-report",
+  "repository": "https://github.com/xobic/visual-research-report",
   "keywords": [
     "research",
     "visualization",
@@ -16,9 +18,10 @@
   "interface": {
     "displayName": "Visual Research Report",
     "shortDescription": "Build traceable editorial research websites.",
-    "longDescription": "Compiles a deep report into a sourced data layer, reference-faithful editorial or institutional layouts, shape-aware interactive charts, a four-view theme-atom cover, drill-down evidence cards, and verified multi-file, single-file, and optional PDF deliverables.",
+    "longDescription": "Compiles a deep report into a sourced data layer, reference-faithful editorial or institutional layouts, sticky chapter navigation, scroll-driven history, causal-horizon maps, a four-view theme-atom cover, drill-down evidence cards, and verified multi-file, single-file, and optional PDF deliverables.",
     "developerName": "Gao",
     "category": "Productivity",
+    "websiteURL": "https://github.com/xobic/visual-research-report",
     "capabilities": [
       "Interactive",
       "Write"

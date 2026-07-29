@@ -22,7 +22,8 @@ REQUIRED = (
 REQUIRED_APP_TOKENS = (
     "report.ui_labels", "app.inert", "data-stack-share", "data-scroll-latest",
     'role=\"tab\"', "ArrowRight", "drawerFocusable", "data-contained-overflow",
-    "tension-balance", "() => String(value)",
+    "tension-balance", "history-scrolly", "causal-horizon-map", "data-history-mode",
+    "data-node-id", "atom-engineering-svg", "() => String(value)",
 )
 
 

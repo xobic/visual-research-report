@@ -4,15 +4,16 @@ Use the bundled tokens and components as a restrained publication system: paper-
 
 ## Layout contracts
 
-- `editorial-longform`: reference-led flat paper, 1440px page, 1120px chart plate, 720px prose, white background, navy ink, cobalt emphasis, semantic red, and a non-sticky directory band. Use it for the long Chinese editorial research page shown in a supplied reference.
+- `editorial-longform`: reference-led flat paper, 1440px page, 1120px chart plate, 720px prose, white background, navy ink, cobalt emphasis, semantic red, and a non-sticky directory band.
+- `editorial-scrollspy`: the same editorial measures and visual language, with a restrained sticky segmented chapter track. Use it only when navigation materially improves a long report or the supplied reference uses scroll-position feedback.
 - `institutional-rail`: dashboard-led layout with a sticky desktop rail and wider interactive cover. Use it only when persistent navigation and KPIs materially help the task.
 
-Read [editorial-longform.md](editorial-longform.md) for reference measurement, print, and comparison rules. Do not combine the two contracts into a hybrid card dashboard.
+Read [editorial-longform.md](editorial-longform.md) for reference measurement, print, and comparison rules. `editorial-scrollspy` is an editorial navigation variant, not permission to introduce a hybrid card dashboard.
 
 ## Hierarchy and layout
 
 - The cover establishes the theme atom and publication identity.
-- Immediately after the cover, place key numbers, contents, and the research contract. The institutional preset uses a sticky desktop rail. The editorial preset uses a flat directory band before the article and never introduces a dark side dashboard.
+- Immediately after the cover, place key numbers, contents, and the research contract. The institutional preset uses a sticky desktop rail. `editorial-longform` uses a flat directory band; `editorial-scrollspy` turns only the chapter links into a sticky segmented track and never introduces a dark side dashboard.
 - Keep prose at its readable measure and allow chart plates to widen independently.
 - Every chart includes title, subtitle, source line, and optional analyst note.
 - Stable source anchors use `#source-Sxx`.

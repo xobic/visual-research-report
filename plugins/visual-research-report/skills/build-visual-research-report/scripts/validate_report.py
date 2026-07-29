@@ -17,13 +17,14 @@ FACT_ID = re.compile(r"^F\d{2,}$")
 CHART_TYPES = {
     "entity-ramp", "destiny-flow", "timeline", "matrix-heat",
     "value-stack", "odds-board", "line", "paired-bars", "tension-balance",
+    "history-scrolly", "causal-horizon-map",
 }
 FACT_KINDS = {"reported", "estimate", "derived", "scenario", "threshold", "probability"}
 COVER_VIEWS = {"recursive", "exploded", "blueprint", "impact"}
 STACK_ENCODINGS = {"absolute", "share"}
 SOURCE_CLASSIFICATIONS = {"primary", "secondary"}
 CURRENT_SCHEMA = "visual-research-report@2"
-PRESENTATION_PRESETS = {"institutional-rail", "editorial-longform"}
+PRESENTATION_PRESETS = {"institutional-rail", "editorial-longform", "editorial-scrollspy"}
 EVIDENCE_STATUSES = {"verified", "mixed", "synthetic"}
 LOCATOR_KINDS = {"document", "dataset", "web", "audio-video", "visual"}
 EARNINGS_PRESET = "public-equity-earnings"
@@ -93,6 +94,11 @@ def _fact_ref(value: Any, path: str, fact_ids: set[str], errors: list[str], requ
 def _number(value: Any, path: str, errors: list[str]) -> None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         errors.append(f"{path} must be numeric")
+
+
+def _normalized_number(value: Any, path: str, errors: list[str]) -> None:
+    if not _finite_number(value) or not 0 <= float(value) <= 100:
+        errors.append(f"{path} must be a finite number between 0 and 100")
 
 
 def _finite_number(value: Any) -> bool:
@@ -427,6 +433,186 @@ def _validate_chart(
             errors.append(f"{path}.data line facts use inconsistent units: {sorted(units)}")
         _validate_scale(data.get("scale"), f"{path}.data.scale", line_values, errors, required=schema_v2)
 
+    elif chart_type == "history-scrolly":
+        series = data.get("series")
+        names: set[str] = set()
+        colors: set[str] = set()
+        units: set[str] = set()
+        history_values: list[float] = []
+        first_series_labels: list[str] = []
+        if not isinstance(series, list) or not series:
+            errors.append(f"{path}.data.series must be a non-empty array")
+        else:
+            for i, item in enumerate(series):
+                p = f"{path}.data.series[{i}]"
+                if not isinstance(item, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(item, ("name",), p, errors)
+                name = item.get("name")
+                if name in names:
+                    errors.append(f"{p}.name duplicates series {name!r}")
+                names.add(name)
+                color = item.get("color")
+                if color is not None:
+                    if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{3,8}|(?:rgb|hsl)a?\([^;{}]+\)|[a-zA-Z]+", color.strip()):
+                        errors.append(f"{p}.color must be a safe CSS color")
+                    elif color.lower() in colors:
+                        errors.append(f"{p}.color duplicates another series color")
+                    else:
+                        colors.add(color.lower())
+                points = item.get("points")
+                if not isinstance(points, list) or len(points) < 2:
+                    errors.append(f"{p}.points must contain at least two points")
+                    continue
+                point_labels: set[str] = set()
+                for j, point in enumerate(points):
+                    c = f"{p}.points[{j}]"
+                    if not isinstance(point, dict):
+                        errors.append(f"{c} must be an object")
+                        continue
+                    _require_text(point, ("label",), c, errors)
+                    label = point.get("label")
+                    if isinstance(label, str) and label.strip():
+                        if label in point_labels:
+                            errors.append(f"{c}.label duplicates point {label!r} in the same series")
+                        point_labels.add(label)
+                        if i == 0:
+                            first_series_labels.append(label)
+                    _number(point.get("value"), f"{c}.value", errors)
+                    fact_id = point.get("fact_id")
+                    _fact_ref(fact_id, f"{c}.fact_id", fact_ids, errors)
+                    _assert_mark_matches_fact(point.get("value"), fact_id, fact_lookup, c, errors)
+                    if _finite_number(point.get("value")):
+                        history_values.append(float(point["value"]))
+                    unit = _fact_unit(fact_id, fact_lookup)
+                    if unit:
+                        units.add(unit)
+        if len(units) > 1 and not data.get("allow_mixed_units"):
+            errors.append(f"{path}.data history facts use inconsistent units: {sorted(units)}")
+        _validate_scale(data.get("scale"), f"{path}.data.scale", history_values, errors, required=True)
+
+        scenes = data.get("scenes")
+        scene_ids: set[str] = set()
+        label_positions = {label: index for index, label in enumerate(first_series_labels)}
+        if not isinstance(scenes, list) or len(scenes) < 2:
+            errors.append(f"{path}.data.scenes must contain at least two scenes")
+        else:
+            for i, scene in enumerate(scenes):
+                p = f"{path}.data.scenes[{i}]"
+                if not isinstance(scene, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(scene, ("id", "title", "start_label", "end_label"), p, errors)
+                scene_id = scene.get("id")
+                if isinstance(scene_id, str) and scene_id.strip():
+                    if scene_id in scene_ids:
+                        errors.append(f"{p}.id duplicates scene {scene_id!r}")
+                    scene_ids.add(scene_id)
+                if "body" in scene and (not isinstance(scene["body"], str) or not scene["body"].strip()):
+                    errors.append(f"{p}.body must be a non-empty string")
+                _check_refs(scene.get("annotation_fact_ids"), fact_ids, f"{p}.annotation_fact_ids", errors)
+                start_label, end_label = scene.get("start_label"), scene.get("end_label")
+                if start_label not in label_positions:
+                    errors.append(f"{p}.start_label must exist in the first series")
+                if end_label not in label_positions:
+                    errors.append(f"{p}.end_label must exist in the first series")
+                if start_label in label_positions and end_label in label_positions:
+                    if label_positions[start_label] >= label_positions[end_label]:
+                        errors.append(f"{p} start_label must precede end_label in the first series")
+
+    elif chart_type == "causal-horizon-map":
+        horizons = data.get("horizons")
+        horizon_ids: set[str] = set()
+        if not isinstance(horizons, list) or len(horizons) < 2:
+            errors.append(f"{path}.data.horizons must contain at least two horizons")
+        else:
+            for i, horizon in enumerate(horizons):
+                p = f"{path}.data.horizons[{i}]"
+                if not isinstance(horizon, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(horizon, ("id", "label"), p, errors)
+                horizon_id = horizon.get("id")
+                if isinstance(horizon_id, str) and horizon_id.strip():
+                    if horizon_id in horizon_ids:
+                        errors.append(f"{p}.id duplicates horizon {horizon_id!r}")
+                    horizon_ids.add(horizon_id)
+
+        nodes = data.get("nodes")
+        node_ids: set[str] = set()
+        if not isinstance(nodes, list) or len(nodes) < 2:
+            errors.append(f"{path}.data.nodes must contain at least two nodes")
+        else:
+            for i, node in enumerate(nodes):
+                p = f"{path}.data.nodes[{i}]"
+                if not isinstance(node, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(node, ("id", "label", "horizon_id", "direction", "confidence"), p, errors)
+                node_id = node.get("id")
+                if isinstance(node_id, str) and node_id.strip():
+                    if node_id in node_ids:
+                        errors.append(f"{p}.id duplicates node {node_id!r}")
+                    node_ids.add(node_id)
+                if node.get("horizon_id") not in horizon_ids:
+                    errors.append(f"{p}.horizon_id must reference a declared horizon")
+                if node.get("direction") not in {"up", "down", "mixed"}:
+                    errors.append(f"{p}.direction must be up, down, or mixed")
+                if node.get("confidence") not in {"low", "medium", "high"}:
+                    errors.append(f"{p}.confidence must be low, medium, or high")
+                _fact_ref(node.get("signal_fact_id"), f"{p}.signal_fact_id", fact_ids, errors)
+                _fact_ref(node.get("lag_fact_id"), f"{p}.lag_fact_id", fact_ids, errors, required=False)
+                _fact_ref(node.get("threshold_fact_id"), f"{p}.threshold_fact_id", fact_ids, errors, required=False)
+
+                sparkline = node.get("sparkline")
+                if not isinstance(sparkline, dict):
+                    errors.append(f"{p}.sparkline must be an object")
+                    continue
+                points = sparkline.get("points")
+                sparkline_values: list[float] = []
+                point_labels: set[str] = set()
+                if not isinstance(points, list) or len(points) < 2:
+                    errors.append(f"{p}.sparkline.points must contain at least two points")
+                else:
+                    for j, point in enumerate(points):
+                        c = f"{p}.sparkline.points[{j}]"
+                        if not isinstance(point, dict):
+                            errors.append(f"{c} must be an object")
+                            continue
+                        _require_text(point, ("label",), c, errors)
+                        label = point.get("label")
+                        if isinstance(label, str) and label.strip():
+                            if label in point_labels:
+                                errors.append(f"{c}.label duplicates point {label!r} in the same sparkline")
+                            point_labels.add(label)
+                        _number(point.get("value"), f"{c}.value", errors)
+                        fact_id = point.get("fact_id")
+                        _fact_ref(fact_id, f"{c}.fact_id", fact_ids, errors)
+                        _assert_mark_matches_fact(point.get("value"), fact_id, fact_lookup, c, errors)
+                        if _finite_number(point.get("value")):
+                            sparkline_values.append(float(point["value"]))
+                _validate_scale(
+                    sparkline.get("scale"), f"{p}.sparkline.scale", sparkline_values, errors, required=True,
+                )
+
+        edges = data.get("edges")
+        if not isinstance(edges, list) or not edges:
+            errors.append(f"{path}.data.edges must be a non-empty array")
+        else:
+            for i, edge in enumerate(edges):
+                p = f"{path}.data.edges[{i}]"
+                if not isinstance(edge, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                source, target = edge.get("from"), edge.get("to")
+                if source not in node_ids or target not in node_ids:
+                    errors.append(f"{p} must connect declared nodes")
+                if source is not None and source == target:
+                    errors.append(f"{p} cannot connect a node to itself")
+                if "label" in edge and (not isinstance(edge["label"], str) or not edge["label"].strip()):
+                    errors.append(f"{p}.label must be a non-empty string")
+
     elif chart_type == "paired-bars":
         items = data.get("items")
         scale = data.get("scale")
@@ -579,6 +765,63 @@ def validate_report(data: dict[str, Any]) -> tuple[list[str], list[str]]:
             for index, view in enumerate(views):
                 if isinstance(view, dict):
                     _require_text(view, ("id", "label", "alt"), f"theme_atom.views[{index}]", errors)
+
+        schematic = atom.get("schematic")
+        if schematic is not None:
+            if not isinstance(schematic, dict):
+                errors.append("theme_atom.schematic must be an object")
+            else:
+                view_box = schematic.get("view_box")
+                if (
+                    not isinstance(view_box, list)
+                    or len(view_box) != 2
+                    or not all(_finite_number(value) and float(value) > 0 for value in view_box)
+                ):
+                    errors.append("theme_atom.schematic.view_box must contain exactly two positive finite numbers")
+
+                parts = schematic.get("parts")
+                part_ids: set[str] = set()
+                if not isinstance(parts, list) or not 2 <= len(parts) <= 12:
+                    errors.append("theme_atom.schematic.parts must contain between 2 and 12 parts")
+                else:
+                    for index, part in enumerate(parts):
+                        path = f"theme_atom.schematic.parts[{index}]"
+                        if not isinstance(part, dict):
+                            errors.append(f"{path} must be an object")
+                            continue
+                        _require_text(part, ("id", "label", "shape"), path, errors)
+                        part_id = part.get("id")
+                        if isinstance(part_id, str) and part_id.strip():
+                            if part_id in part_ids:
+                                errors.append(f"{path}.id duplicates part {part_id!r}")
+                            part_ids.add(part_id)
+                        shape = part.get("shape")
+                        if shape not in {"rect", "circle"}:
+                            errors.append(f"{path}.shape must be rect or circle")
+                        coordinate_keys = ("x", "y", "width") if shape == "circle" else ("x", "y", "width", "height")
+                        for key in coordinate_keys:
+                            _normalized_number(part.get(key), f"{path}.{key}", errors)
+                        if shape == "circle" and "height" in part:
+                            _normalized_number(part.get("height"), f"{path}.height", errors)
+                        role = part.get("role")
+                        if role is not None and role not in {"shell", "core", "interface", "detail"}:
+                            errors.append(f"{path}.role must be shell, core, interface, or detail")
+
+                connections = schematic.get("connections")
+                if connections is not None:
+                    if not isinstance(connections, list):
+                        errors.append("theme_atom.schematic.connections must be an array")
+                    else:
+                        for index, connection in enumerate(connections):
+                            path = f"theme_atom.schematic.connections[{index}]"
+                            if not isinstance(connection, dict):
+                                errors.append(f"{path} must be an object")
+                                continue
+                            source, target = connection.get("from"), connection.get("to")
+                            if source not in part_ids or target not in part_ids:
+                                errors.append(f"{path} must connect declared parts")
+                            if source is not None and source == target:
+                                errors.append(f"{path} cannot connect a part to itself")
 
     sources = data.get("sources")
     source_ids = _ids(sources, "sources", SOURCE_ID, errors)

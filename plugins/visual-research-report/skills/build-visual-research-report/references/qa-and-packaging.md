@@ -46,6 +46,10 @@ Run desktop (1440×1000), tablet (1024×900), and mobile (390×844):
 - value-stack ribbon widths match declared shares;
 - multi-series line styles are distinct and the mobile scroller starts at the latest observation;
 - source links resolve to stable anchors and reduced-motion mode remains usable.
+- `editorial-scrollspy` keeps its chapter track sticky without covering anchored headings or creating page overflow;
+- every `history-scrolly` scene activates in order, updates the declared focus window, and falls back to a complete static chart under reduced motion;
+- every causal node exposes direction and confidence in text, keeps its sparkline inside the node, and preserves one local focus target per fact;
+- engineering schematic parts remain the same across all four cover views; animation is absent under reduced motion and in print.
 
 Save viewport screenshots for all three widths plus cover and key chart anchors. Browser full-page stitching may repeat content, so use it only when verified. Inspect for label collision, clipped copy, directory/rail overlap, broken images, and unintended blank regions. Automated geometry is necessary but not sufficient.
 

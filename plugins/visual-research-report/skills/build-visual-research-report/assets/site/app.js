@@ -71,6 +71,16 @@
     long_forces: "Upside forces",
     short_forces: "Downside forces",
     tripwires: "Tripwires",
+    history_chart: "Historical series",
+    history_scene: "Scene {index} of {count}",
+    causal_horizon_map: "Causal horizon map",
+    causal_links: "Causal links",
+    causal_scroll_hint: "Scroll inside this region to compare horizons",
+    signal: "Signal",
+    lag: "Lag",
+    threshold: "Threshold",
+    direction: "Direction",
+    confidence: "Confidence",
   };
 
   const ZH = {
@@ -127,6 +137,16 @@
     long_forces: "多头力量",
     short_forces: "空头力量",
     tripwires: "失效触发器",
+    history_chart: "历史序列",
+    history_scene: "场景 {index} / {count}",
+    causal_horizon_map: "因果地平线图",
+    causal_links: "因果连接",
+    causal_scroll_hint: "在此区域内横向滚动以比较不同期限",
+    signal: "信号",
+    lag: "滞后",
+    threshold: "阈值",
+    direction: "方向",
+    confidence: "置信度",
   };
 
   const language = String(report.meta.language || "en-US");
@@ -173,9 +193,68 @@
     return `<button class="${className}" type="button" data-fact-id="${escapeHtml(factId)}" data-kind="${escapeHtml(fact.kind)}">${escapeHtml(label ?? fact.display)}</button>`;
   };
 
+  const renderSchematic = (schematic) => {
+    const dimensions = Array.isArray(schematic?.view_box) ? schematic.view_box.map(Number) : [];
+    const width = Number.isFinite(dimensions[0]) && dimensions[0] > 0 ? dimensions[0] : 1200;
+    const height = Number.isFinite(dimensions[1]) && dimensions[1] > 0 ? dimensions[1] : 800;
+    const parts = Array.isArray(schematic?.parts) ? schematic.parts : [];
+    const partCenters = new Map();
+    const px = (value) => Number(value) / 100 * width;
+    const py = (value) => Number(value) / 100 * height;
+    const radius = (value) => Number(value) / 200 * Math.min(width, height);
+
+    parts.forEach((part) => {
+      if (part.shape === "circle") partCenters.set(part.id, [px(part.x), py(part.y)]);
+      else partCenters.set(part.id, [px(Number(part.x) + Number(part.width) / 2), py(Number(part.y) + Number(part.height) / 2)]);
+    });
+
+    const connections = (schematic.connections || []).map((connection, index) => {
+      const source = partCenters.get(connection.from);
+      const target = partCenters.get(connection.to);
+      if (!source || !target) return "";
+      return `<line class="atom-connection schematic-connection" data-connection-index="${index}" data-from="${escapeHtml(connection.from)}" data-to="${escapeHtml(connection.to)}" x1="${source[0].toFixed(3)}" y1="${source[1].toFixed(3)}" x2="${target[0].toFixed(3)}" y2="${target[1].toFixed(3)}"></line>`;
+    }).join("");
+    const echoConnections = (schematic.connections || []).map((connection) => {
+      const source = partCenters.get(connection.from);
+      const target = partCenters.get(connection.to);
+      if (!source || !target) return "";
+      return `<line class="schematic-echo-connection" x1="${source[0].toFixed(3)}" y1="${source[1].toFixed(3)}" x2="${target[0].toFixed(3)}" y2="${target[1].toFixed(3)}"></line>`;
+    }).join("");
+
+    const shapes = parts.map((part, index) => {
+      const role = part.role || "detail";
+      const shared = `class="atom-part schematic-part schematic-part-${escapeHtml(part.shape)} schematic-role-${escapeHtml(role)}" data-part-index="${index}" data-part-id="${escapeHtml(part.id)}" style="--part-index:${index};--part-count:${parts.length}"`;
+      const shape = part.shape === "circle"
+        ? `<circle cx="${px(part.x).toFixed(3)}" cy="${py(part.y).toFixed(3)}" r="${radius(part.width).toFixed(3)}"></circle>`
+        : `<rect x="${px(part.x).toFixed(3)}" y="${py(part.y).toFixed(3)}" width="${px(part.width).toFixed(3)}" height="${py(part.height).toFixed(3)}" rx="${Math.min(width, height) * 0.008}"></rect>`;
+      const labelFits = part.shape === "circle"
+        ? Number(part.width) >= 14
+        : Number(part.width) >= 18 && Number(part.height) >= 10;
+      const center = partCenters.get(part.id);
+      const labelSize = Math.max(Math.min(width, height) * 0.018, 1.8);
+      const label = labelFits && center
+        ? `<text class="schematic-part-label" x="${center[0].toFixed(3)}" y="${center[1].toFixed(3)}" style="font-size:${labelSize.toFixed(3)}px" text-anchor="middle" dominant-baseline="middle">${escapeHtml(part.label)}</text>`
+        : "";
+      return `<g ${shared}>${shape}${label}</g>`;
+    }).join("");
+    const echoShapes = parts.map((part) => part.shape === "circle"
+      ? `<circle class="schematic-echo-part" cx="${px(part.x).toFixed(3)}" cy="${py(part.y).toFixed(3)}" r="${radius(part.width).toFixed(3)}"></circle>`
+      : `<rect class="schematic-echo-part" x="${px(part.x).toFixed(3)}" y="${py(part.y).toFixed(3)}" width="${px(part.width).toFixed(3)}" height="${py(part.height).toFixed(3)}" rx="${Math.min(width, height) * 0.008}"></rect>`).join("");
+    const echo = `<g class="schematic-echo-geometry">${echoConnections}${echoShapes}</g>`;
+
+    return `<svg class="atom-engineering-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"><g class="schematic-echo schematic-echo-far" aria-hidden="true">${echo}</g><g class="schematic-echo schematic-echo-near" aria-hidden="true">${echo}</g><g class="schematic-connections">${connections}</g><g class="schematic-parts">${shapes}</g></svg>`;
+  };
+
   const renderCoverVisual = (view) => {
     const atom = report.theme_atom || {};
     if (view.asset) return `<img class="cover-image" src="${escapeHtml(view.asset)}" alt="${escapeHtml(view.alt)}">`;
+    if (atom.schematic?.parts?.length) {
+      return `<div class="atom-schematic atom-schematic-engineered" role="img" aria-label="${escapeHtml(view.alt)}">
+        <span class="schematic-tag">${escapeHtml(view.label)}</span>${renderSchematic(atom.schematic)}
+        <strong class="atom-name">${escapeHtml(atom.name)}</strong>
+        <span class="atom-caption"><span>${escapeHtml(view.label)}</span><span>${escapeHtml(atom.material || t("physical_system"))}</span></span>
+      </div>`;
+    }
     return `<div class="atom-schematic" role="img" aria-label="${escapeHtml(view.alt)}">
       <span class="schematic-tag">${escapeHtml(t("schematic_fallback"))}</span>
       <span class="atom-layer layer-b"></span><span class="atom-layer layer-a"></span><span class="atom-core"></span>
@@ -350,6 +429,134 @@
     return `<div class="line-wrap" data-scroll-latest="true" role="region" aria-label="${escapeHtml(t("line_chart"))}" tabindex="0"><svg class="line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t("line_chart"))}">${horizontal}${seriesSvg}${labelSvg}${xAxis}</svg></div><div class="line-legend">${legend}</div>`;
   };
 
+  let historySequence = 0;
+  const renderHistoryScrolly = (data) => {
+    const instanceId = `history-${historySequence += 1}`;
+    const width = 960;
+    const height = 390;
+    const pad = { left: 62, right: 34, top: 34, bottom: 52 };
+    const pointLabel = (point) => String(point?.label ?? point?.x ?? "");
+    const pointValue = (point) => Number(point?.value ?? point?.y);
+    const series = data.series || [];
+    const allPoints = series.flatMap((item) => item.points || []);
+    const values = allPoints.map(pointValue).filter(Number.isFinite);
+    const scale = data.scale || {};
+    const domain = Array.isArray(scale.domain) ? scale.domain.map(Number) : [];
+    const minY = Number.isFinite(domain[0]) ? domain[0] : Math.min(...values, 0);
+    const maxY = Number.isFinite(domain[1]) ? domain[1] : Math.max(...values, 1);
+    const ySpan = maxY - minY || 1;
+    const firstLabels = (series[0]?.points || []).map(pointLabel);
+    const xLabels = [...firstLabels, ...allPoints.map(pointLabel).filter((label) => !firstLabels.includes(label))];
+    const xAtIndex = (index) => pad.left + (index / Math.max(1, xLabels.length - 1)) * (width - pad.left - pad.right);
+    const xAt = (label) => xAtIndex(Math.max(0, xLabels.indexOf(String(label))));
+    const yAt = (value) => pad.top + (1 - (Number(value) - minY) / ySpan) * (height - pad.top - pad.bottom);
+    const ticks = Array.isArray(scale.ticks) && scale.ticks.length > 1
+      ? scale.ticks.map(Number)
+      : Array.from({ length: 5 }, (_, index) => minY + index / 4 * ySpan);
+    const horizontal = [...ticks].reverse().map((value) => {
+      const y = yAt(value);
+      const label = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+      return `<line class="history-grid-line" x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"></line><text class="history-axis-label" x="${pad.left - 10}" y="${y + 4}" text-anchor="end">${escapeHtml(label)}</text>`;
+    }).join("");
+
+    const scenes = (data.scenes || []).map((scene, index) => {
+      const rawStart = xLabels.indexOf(String(scene.start_label));
+      const rawEnd = xLabels.indexOf(String(scene.end_label));
+      const startIndex = Math.max(0, rawStart);
+      const endIndex = Math.max(startIndex, rawEnd < 0 ? xLabels.length - 1 : rawEnd);
+      return { ...scene, index, startIndex, endIndex };
+    });
+    const initialScene = scenes[0] || { id: "full", title: t("history_chart"), start_label: xLabels[0] || "", end_label: xLabels[xLabels.length - 1] || "", startIndex: 0, endIndex: Math.max(0, xLabels.length - 1) };
+    const initialX = xAtIndex(initialScene.startIndex);
+    const initialWidth = Math.max(2, xAtIndex(initialScene.endIndex) - initialX);
+    const clipId = `${instanceId}-focus-clip`;
+
+    const paths = series.map((item, seriesIndex) => {
+      const color = item.color || SERIES_COLORS[seriesIndex % SERIES_COLORS.length];
+      const points = item.points || [];
+      const polyline = points.map((point) => `${xAt(pointLabel(point))},${yAt(pointValue(point))}`).join(" ");
+      return `<polyline class="history-path history-line-path is-context" data-series-index="${seriesIndex}" style="--series-color:${escapeHtml(color)}" points="${polyline}"></polyline><polyline class="history-path history-line-path is-focus" data-series-index="${seriesIndex}" style="--series-color:${escapeHtml(color)}" points="${polyline}" clip-path="url(#${clipId})"></polyline>`;
+    }).join("");
+    const marks = series.map((item, seriesIndex) => {
+      const color = item.color || SERIES_COLORS[seriesIndex % SERIES_COLORS.length];
+      return (item.points || []).map((point) => {
+        const fact = facts.get(point.fact_id);
+        if (!fact) return "";
+        const pointIndex = Math.max(0, xLabels.indexOf(pointLabel(point)));
+        const aria = `${item.name}, ${pointLabel(point)}, ${fact.display}`;
+        return `<g class="history-mark" role="button" tabindex="0" data-fact-id="${escapeHtml(point.fact_id)}" data-point-index="${pointIndex}" data-series-index="${seriesIndex}" aria-label="${escapeHtml(aria)}"><circle class="history-mark-hit" cx="${xAtIndex(pointIndex)}" cy="${yAt(pointValue(point))}" r="24"></circle><circle class="history-point history-mark-dot" aria-hidden="true" style="--series-color:${escapeHtml(color)}" cx="${xAtIndex(pointIndex)}" cy="${yAt(pointValue(point))}" r="5"></circle></g>`;
+      }).join("");
+    }).join("");
+    const labelStride = Math.max(1, Math.ceil(xLabels.length / 9));
+    const boundaryLabels = new Set(scenes.flatMap((scene) => [scene.start_label, scene.end_label]).map(String));
+    const xAxis = xLabels.map((label, index) => (index === 0 || index === xLabels.length - 1 || index % labelStride === 0 || boundaryLabels.has(label))
+      ? `<text class="history-axis-label history-x-label" data-label-index="${index}" x="${xAtIndex(index)}" y="${height - 18}" text-anchor="middle">${escapeHtml(label)}</text>`
+      : "").join("");
+    const legend = series.map((item, index) => `<span><i class="legend-mark" style="background:${escapeHtml(item.color || SERIES_COLORS[index % SERIES_COLORS.length])}"></i>${escapeHtml(item.name)}</span>`).join("");
+    const plottedFactIds = new Set(allPoints.map((point) => point.fact_id).filter(Boolean));
+    const renderedAnnotationFactIds = new Set();
+    const sceneSteps = scenes.map((scene, index) => {
+      const annotations = (scene.annotation_fact_ids || []).map((id) => {
+        if (plottedFactIds.has(id) || renderedAnnotationFactIds.has(id)) return "";
+        renderedAnnotationFactIds.add(id);
+        return factControl(id, undefined, "history-annotation-fact");
+      }).join("");
+      return `<article class="history-scene${index === 0 ? " is-active" : ""}" data-scrolly-step data-scene-id="${escapeHtml(scene.id)}" data-scene-index="${index}" data-start-index="${scene.startIndex}" data-end-index="${scene.endIndex}" data-start-label="${escapeHtml(scene.start_label)}" data-end-label="${escapeHtml(scene.end_label)}" data-scene-title="${escapeHtml(scene.title)}" data-annotation-fact-ids="${escapeHtml((scene.annotation_fact_ids || []).join(" "))}" aria-current="${index === 0 ? "true" : "false"}"><button class="history-scene-trigger" type="button" data-history-scene-trigger aria-controls="${instanceId}-chart"><span class="history-scene-number">${escapeHtml(t("history_scene", { index: index + 1, count: scenes.length }))}</span><strong>${escapeHtml(scene.title)}</strong>${scene.body ? `<span>${escapeHtml(scene.body)}</span>` : ""}<span class="history-scene-range">${escapeHtml(scene.start_label)} — ${escapeHtml(scene.end_label)}</span></button>${annotations ? `<div class="history-scene-facts" aria-label="${escapeHtml(t("evidence"))}">${annotations}</div>` : ""}</article>`;
+    }).join("");
+
+    return `<div class="history-scrolly" data-history-scrolly data-history-id="${instanceId}" data-history-mode="interactive" data-active-scene="${escapeHtml(initialScene.id)}" data-active-scene-index="0" data-reduced-motion="false" data-plot-left="${pad.left}" data-plot-right="${width - pad.right}" data-x-count="${xLabels.length}"><div class="history-stage" data-scene-id="${escapeHtml(initialScene.id)}"><div class="history-stage-status" aria-live="polite"><span class="history-stage-range">${escapeHtml(initialScene.start_label)} — ${escapeHtml(initialScene.end_label)}</span><strong class="history-stage-title">${escapeHtml(initialScene.title)}</strong></div><svg class="history-chart" id="${instanceId}-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t("history_chart"))}" data-scene-start-index="${initialScene.startIndex}" data-scene-end-index="${initialScene.endIndex}" data-focus-start="${escapeHtml(initialScene.start_label)}" data-focus-end="${escapeHtml(initialScene.end_label)}"><defs><clipPath id="${clipId}"><rect class="history-focus-clip" x="${initialX}" y="${pad.top}" width="${initialWidth}" height="${height - pad.top - pad.bottom}"></rect></clipPath></defs>${horizontal}<rect class="history-focus-band history-focus-window" x="${initialX}" y="${pad.top}" width="${initialWidth}" height="${height - pad.top - pad.bottom}" aria-hidden="true"></rect>${paths}${marks}${xAxis}</svg><div class="line-legend history-legend">${legend}</div></div><div class="history-steps">${sceneSteps}</div></div>`;
+  };
+
+  let causalSequence = 0;
+  const renderCausalSparkline = (node, instanceId, reservedFactIds) => {
+    const sparkline = node.sparkline || {};
+    const points = sparkline.points || [];
+    const width = 240;
+    const height = 86;
+    const pad = { left: 8, right: 8, top: 10, bottom: 12 };
+    const values = points.map((point) => Number(point.value)).filter(Number.isFinite);
+    const domain = Array.isArray(sparkline.scale?.domain) ? sparkline.scale.domain.map(Number) : [];
+    const minY = Number.isFinite(domain[0]) ? domain[0] : Math.min(...values, 0);
+    const maxY = Number.isFinite(domain[1]) ? domain[1] : Math.max(...values, 1);
+    const span = maxY - minY || 1;
+    const xAt = (index) => pad.left + index / Math.max(1, points.length - 1) * (width - pad.left - pad.right);
+    const yAt = (value) => pad.top + (1 - (Number(value) - minY) / span) * (height - pad.top - pad.bottom);
+    const polyline = points.map((point, index) => `${xAt(index)},${yAt(point.value)}`).join(" ");
+    const marks = points.map((point, index) => {
+      const fact = facts.get(point.fact_id);
+      if (!fact) return "";
+      const aria = `${node.label}, ${point.label}, ${fact.display}`;
+      if (reservedFactIds.has(point.fact_id)) return `<g class="causal-sparkline-summary-mark" aria-hidden="true" data-point-index="${index}"><circle class="causal-sparkline-dot" cx="${xAt(index)}" cy="${yAt(point.value)}" r="4"></circle></g>`;
+      return `<g class="causal-sparkline-mark" role="button" tabindex="0" data-fact-id="${escapeHtml(point.fact_id)}" data-point-index="${index}" aria-label="${escapeHtml(aria)}"><circle class="causal-sparkline-hit" cx="${xAt(index)}" cy="${yAt(point.value)}" r="16"></circle><circle class="causal-sparkline-dot" aria-hidden="true" cx="${xAt(index)}" cy="${yAt(point.value)}" r="4"></circle></g>`;
+    }).join("");
+    return `<svg class="causal-sparkline" id="${instanceId}-${escapeHtml(node.id)}-sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(`${node.label}: ${t("history_chart")}`)}"><polyline class="causal-spark-path causal-sparkline-path" points="${polyline}"></polyline>${marks}</svg>`;
+  };
+
+  const renderCausalHorizonMap = (data) => {
+    const instanceId = `causal-${causalSequence += 1}`;
+    const nodes = data.nodes || [];
+    const nodeLookup = new Map(nodes.map((node) => [node.id, node]));
+    const reservedFactIds = new Set(nodes.flatMap((node) => [node.signal_fact_id, node.lag_fact_id, node.threshold_fact_id]).filter(Boolean));
+    const directionGlyph = { up: "↑", down: "↓", mixed: "↕" };
+    const columns = (data.horizons || []).map((horizon, horizonIndex) => {
+      const horizonNodes = nodes.filter((node) => node.horizon_id === horizon.id);
+      const cards = horizonNodes.map((node, nodeIndex) => {
+        const signal = factControl(node.signal_fact_id, `${t("signal")}: ${facts.get(node.signal_fact_id)?.display || "—"}`, "causal-fact causal-signal-fact");
+        const lag = node.lag_fact_id ? factControl(node.lag_fact_id, `${t("lag")}: ${facts.get(node.lag_fact_id)?.display || "—"}`, "causal-fact causal-lag-fact") : "";
+        const threshold = node.threshold_fact_id ? factControl(node.threshold_fact_id, `${t("threshold")}: ${facts.get(node.threshold_fact_id)?.display || "—"}`, "causal-fact causal-threshold-fact") : "";
+        const confidenceValue = { low: 0.32, medium: 0.64, high: 0.94 }[node.confidence] || 0.5;
+        return `<article class="causal-node" id="${instanceId}-node-${escapeHtml(node.id)}" data-node-id="${escapeHtml(node.id)}" data-direction="${escapeHtml(node.direction)}" data-confidence="${escapeHtml(node.confidence)}" style="--node-index:${nodeIndex};--confidence:${confidenceValue}"><header class="causal-node-head"><span class="causal-direction" aria-label="${escapeHtml(`${t("direction")}: ${node.direction}`)}">${directionGlyph[node.direction] || "—"}</span><h4 class="causal-node-label">${escapeHtml(node.label)}</h4><span class="causal-confidence">${escapeHtml(`${t("confidence")}: ${node.confidence}`)}</span></header>${renderCausalSparkline(node, instanceId, reservedFactIds)}<div class="causal-node-facts">${signal}${lag}${threshold}</div></article>`;
+      }).join("");
+      return `<section class="causal-column" data-horizon-id="${escapeHtml(horizon.id)}" style="--horizon-index:${horizonIndex}"><header class="causal-column-head causal-column-title"><span>${escapeHtml(t("horizon"))}</span><h4>${escapeHtml(horizon.label)}</h4></header><div class="causal-node-list">${cards}</div></section>`;
+    }).join("");
+    const connectors = (data.edges || []).map((edge, index) => {
+      const source = nodeLookup.get(edge.from)?.label || edge.from;
+      const target = nodeLookup.get(edge.to)?.label || edge.to;
+      return `<div class="causal-connector" role="listitem" data-edge-index="${index}" data-from="${escapeHtml(edge.from)}" data-to="${escapeHtml(edge.to)}"><span class="causal-connector-route">${escapeHtml(source)} <span aria-hidden="true">→</span> ${escapeHtml(target)}</span>${edge.label ? `<span class="causal-connector-label">${escapeHtml(edge.label)}</span>` : ""}</div>`;
+    }).join("");
+    return `<div class="causal-horizon-map" role="group" aria-label="${escapeHtml(t("causal_horizon_map"))}" style="--horizon-count:${Math.max(1, data.horizons?.length || 0)}"><p class="causal-overflow-hint">${escapeHtml(t("causal_scroll_hint"))}</p><div class="causal-columns" data-contained-overflow="true" role="region" aria-label="${escapeHtml(t("causal_scroll_hint"))}" tabindex="0">${columns}</div><div class="causal-connectors" role="list" aria-label="${escapeHtml(t("causal_links"))}">${connectors}</div></div>`;
+  };
+
   const renderPairs = (data) => {
     const chartScale = data.scale || {};
     const renderPair = (item) => {
@@ -383,7 +590,7 @@
     return `<div class="tension-balance"><div class="balance-beam" aria-hidden="true"><i></i></div><div class="balance-grid">${side(t("long_forces"), data.long, "long")}<div class="balance-center"><span>${escapeHtml(data.center_label)}</span></div>${side(t("short_forces"), data.short, "short")}</div><div class="tripwire-zone"><h4>${escapeHtml(t("tripwires"))}</h4>${tripwires}</div></div>`;
   };
 
-  const chartRenderers = { "entity-ramp": renderEntityRamp, "destiny-flow": renderFlow, timeline: renderTimeline, "matrix-heat": renderMatrix, "value-stack": renderStack, "odds-board": renderOdds, line: renderLine, "paired-bars": renderPairs, "tension-balance": renderTensionBalance };
+  const chartRenderers = { "entity-ramp": renderEntityRamp, "destiny-flow": renderFlow, timeline: renderTimeline, "matrix-heat": renderMatrix, "value-stack": renderStack, "odds-board": renderOdds, line: renderLine, "history-scrolly": renderHistoryScrolly, "causal-horizon-map": renderCausalHorizonMap, "paired-bars": renderPairs, "tension-balance": renderTensionBalance };
   const renderChart = (chart) => `<figure class="chart-plate" id="chart-${escapeHtml(chart.id)}" data-chart-type="${escapeHtml(chart.type)}"><figcaption><p class="figure-kicker">${escapeHtml(chart.id)} / ${escapeHtml(chart.type)}</p><h3 class="chart-title">${escapeHtml(chart.title)}</h3><p class="chart-subtitle">${escapeHtml(chart.subtitle)}</p></figcaption><div class="chart-plot">${chartRenderers[chart.type]?.(chart.data || {}) || ""}</div>${chart.note ? `<p class="chart-note"><strong>${escapeHtml(t("analyst_note"))}:</strong> ${escapeHtml(chart.note)}</p>` : ""}<p class="chart-source">${escapeHtml(t("sources"))} ${sourceLinks(chart.source_ids)}</p></figure>`;
   const renderSection = (section) => `<section class="report-section" id="${escapeHtml(section.id)}"><header class="section-head"><p class="section-eyebrow">${escapeHtml(section.eyebrow)}</p><h2 class="section-title">${escapeHtml(section.title)}</h2><p class="section-dek">${escapeHtml(section.dek)}</p></header>${(section.body || []).map(renderBodyBlock).join("")}${(section.charts || []).map(renderChart).join("")}${section.annotation ? `<aside class="annotation"><strong>${escapeHtml(t("analyst_annotation"))}</strong><p>${escapeHtml(section.annotation)}</p></aside>` : ""}${section.takeaways?.length ? `<div class="takeaways"><h3>${escapeHtml(t("decision_takeaways"))}</h3><ul>${section.takeaways.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}</section>`;
 
@@ -404,6 +611,93 @@
   const renderBackmatter = () => `<section class="backmatter" id="sources"><p class="section-eyebrow">${escapeHtml(t("methods_evidence"))}</p><h2>${escapeHtml(t("how_to_read"))}</h2>${renderPresetChecks()}<h3>${escapeHtml(t("methodology"))}</h3><ul class="method-list">${(report.methodology || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><h3>${escapeHtml(t("disclosures"))}</h3><ul class="disclosure-list">${(report.disclosures || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="source-register" aria-label="${escapeHtml(t("source_register"))}">${(report.sources || []).map(renderSource).join("")}</div></section>`;
 
   app.innerHTML = `${renderDataDisclosure()}${renderCover()}<div class="report-shell" id="report-content"><div class="report-layout">${renderRail()}<main class="article-flow">${(report.sections || []).map(renderSection).join("")}${renderBackmatter()}</main></div></div>`;
+
+  const historyControllers = new WeakMap();
+  const setupHistoryScrolly = () => {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    document.querySelectorAll("[data-history-scrolly]").forEach((root) => {
+      const stage = root.querySelector(".history-stage");
+      const chart = root.querySelector(".history-chart");
+      const clip = root.querySelector(".history-focus-clip");
+      const focusWindow = root.querySelector(".history-focus-window");
+      const stageTitle = root.querySelector(".history-stage-title");
+      const stageRange = root.querySelector(".history-stage-range");
+      const steps = [...root.querySelectorAll("[data-scrolly-step]")];
+      const xCount = Math.max(1, Number(root.dataset.xCount));
+      const plotLeft = Number(root.dataset.plotLeft);
+      const plotRight = Number(root.dataset.plotRight);
+      const xAtIndex = (index) => plotLeft + Number(index) / Math.max(1, xCount - 1) * (plotRight - plotLeft);
+
+      root.dataset.reducedMotion = String(reducedMotion);
+      root.dataset.historyMode = reducedMotion ? "static" : "interactive";
+
+      const setScene = (requestedIndex) => {
+        if (!steps.length || !chart) return;
+        const index = Math.max(0, Math.min(steps.length - 1, Number(requestedIndex) || 0));
+        const active = steps[index];
+        const sceneStart = Number(active.dataset.startIndex);
+        const sceneEnd = Number(active.dataset.endIndex);
+        const focusStart = reducedMotion ? 0 : sceneStart;
+        const focusEnd = reducedMotion ? xCount - 1 : sceneEnd;
+        const focusX = xAtIndex(focusStart);
+        const focusWidth = Math.max(2, xAtIndex(focusEnd) - focusX);
+
+        root.dataset.activeScene = active.dataset.sceneId;
+        root.dataset.activeSceneIndex = String(index);
+        stage.dataset.sceneId = active.dataset.sceneId;
+        chart.dataset.sceneStartIndex = String(sceneStart);
+        chart.dataset.sceneEndIndex = String(sceneEnd);
+        chart.dataset.focusStart = reducedMotion ? steps[0].dataset.startLabel : active.dataset.startLabel;
+        chart.dataset.focusEnd = reducedMotion ? steps[steps.length - 1].dataset.endLabel : active.dataset.endLabel;
+        if (clip) {
+          clip.setAttribute("x", String(focusX));
+          clip.setAttribute("width", String(focusWidth));
+        }
+        if (focusWindow) {
+          focusWindow.setAttribute("x", String(focusX));
+          focusWindow.setAttribute("width", String(focusWidth));
+        }
+        if (stageTitle) stageTitle.textContent = active.dataset.sceneTitle || "";
+        if (stageRange) stageRange.textContent = `${active.dataset.startLabel} — ${active.dataset.endLabel}`;
+        const annotationFactIds = new Set((active.dataset.annotationFactIds || "").split(/\s+/).filter(Boolean));
+
+        steps.forEach((step, stepIndex) => {
+          const selected = stepIndex === index;
+          step.classList.toggle("is-active", selected);
+          step.setAttribute("aria-current", String(selected));
+          step.querySelector("[data-history-scene-trigger]")?.setAttribute("aria-pressed", String(selected));
+        });
+        root.querySelectorAll("[data-point-index]").forEach((mark) => {
+          const pointIndex = Number(mark.dataset.pointIndex);
+          const inScene = reducedMotion || (pointIndex >= sceneStart && pointIndex <= sceneEnd);
+          mark.classList.toggle("is-in-scene", inScene);
+          mark.classList.toggle("is-active", inScene);
+          mark.classList.toggle("is-annotated", annotationFactIds.has(mark.dataset.factId));
+        });
+        root.querySelectorAll("[data-label-index]").forEach((label) => {
+          const labelIndex = Number(label.dataset.labelIndex);
+          label.classList.toggle("is-in-scene", reducedMotion || (labelIndex >= sceneStart && labelIndex <= sceneEnd));
+        });
+      };
+
+      historyControllers.set(root, setScene);
+      steps.forEach((step, index) => {
+        step.querySelector("[data-history-scene-trigger]")?.addEventListener("click", () => setScene(index));
+      });
+      setScene(0);
+
+      if (!reducedMotion && "IntersectionObserver" in window) {
+        const visibility = new Map();
+        const sceneObserver = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => visibility.set(entry.target, entry.isIntersecting ? entry.intersectionRatio : 0));
+          const visible = [...visibility.entries()].filter(([, ratio]) => ratio > 0).sort((a, b) => b[1] - a[1]);
+          if (visible.length) setScene(steps.indexOf(visible[0][0]));
+        }, { rootMargin: "-26% 0px -46%", threshold: [0.15, 0.35, 0.6, 0.85] });
+        steps.forEach((step) => sceneObserver.observe(step));
+      }
+    });
+  };
+  setupHistoryScrolly();
 
   const setCover = (viewId, focus = false) => {
     const view = report.theme_atom.views.find((item) => item.id === viewId);
@@ -492,7 +786,16 @@
 
   if ("IntersectionObserver" in window) {
     const links = new Map([...document.querySelectorAll("[data-section-link]")].map((link) => [link.dataset.sectionLink, link]));
-    const observer = new IntersectionObserver((entries) => entries.filter((entry) => entry.isIntersecting).forEach((entry) => links.forEach((link) => link.classList.toggle("is-active", link.dataset.sectionLink === entry.target.id))), { rootMargin: "-20% 0px -65%", threshold: 0 });
+    const activateSection = (sectionId) => {
+      links.forEach((link) => link.classList.toggle("is-active", link.dataset.sectionLink === sectionId));
+      const active = links.get(sectionId);
+      const nav = active?.closest(".rail-nav");
+      if (active && nav && report.presentation?.preset === "editorial-scrollspy") {
+        const targetLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+        nav.scrollTo({ left: Math.max(0, targetLeft), behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      }
+    };
+    const observer = new IntersectionObserver((entries) => entries.filter((entry) => entry.isIntersecting).forEach((entry) => activateSection(entry.target.id)), { rootMargin: "-20% 0px -65%", threshold: 0 });
     document.querySelectorAll(".report-section").forEach((section) => observer.observe(section));
   }
 })();

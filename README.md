@@ -20,9 +20,11 @@ codex plugin add visual-research-report@visual-research-report
 ## 核心能力
 
 - `visual-research-report@2` 数据合同：事实、来源、日期、定位信息、证据状态和结构化披露。
-- 主题原子四视图：递归、爆炸图、工程蓝图与开箱冲击视图围绕同一行业对象展开。
-- 两套版式预设：参考图驱动的 `editorial-longform` 与带信息轨的 `institutional-rail`。
-- 按数据形状路由图表：实体单位、流向图、时间墙、热力矩阵、价值栈、赔率板、张力天平，以及必要时的精确线图/柱图。
+- 主题原子四视图：递归、爆炸图、工程蓝图与开箱冲击视图围绕同一行业对象展开；没有成图素材时可用安全的工程部件合同生成对象级 SVG。
+- 三套版式预设：平面 `editorial-longform`、带 sticky 章节轨的 `editorial-scrollspy`，以及带信息轨的 `institutional-rail`。
+- 按数据形状路由图表：实体单位、流向图、时间墙、热力矩阵、价值栈、赔率板、张力天平、滚动历史、因果地平线，以及必要时的精确线图/柱图。
+- `history-scrolly` 支持按制度阶段或产业周期切换焦点窗口，并提供 reduced-motion 与打印静态降级。
+- `causal-horizon-map` 将方向、置信度、滞后、阈值、sparkline 与证据事实绑定到同一张图。
 - 每个关键数字可打开证据卡片，回溯数值、依据、日期、来源和定位信息。
 - Figma 是可选增强；不可用时使用本地 HTML、CSS、SVG 和浏览器导出完成交付。
 - QA 覆盖离线依赖、JavaScript 语法、响应式布局、交互、控制台错误、PDF 与文件哈希清单。

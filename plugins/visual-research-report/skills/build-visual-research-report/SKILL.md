@@ -1,6 +1,6 @@
 ---
 name: build-visual-research-report
-description: Turn deep reports, research notes, structured tables, source lists, and visual references into polished interactive research websites with a traceable fact layer, one physical "theme atom," four-view cover storytelling, reference-faithful editorial layouts, data-shape-aware charts, clickable evidence drilldowns, responsive and print QA, and offline multi-file plus single-file packaging. Use when asked to visualize a report, match a research-page reference, build an institutional or editorial research microsite, convert a report to HTML/PDF, make report numbers auditable, choose non-generic charts, or package an interactive report that opens through file://.
+description: Turn deep reports, research notes, structured tables, source lists, and visual references into polished interactive research websites with a traceable fact layer, one physical "theme atom," four-view cover storytelling, sticky editorial navigation, scroll-driven history, causal-horizon maps, data-shape-aware charts, clickable evidence drilldowns, responsive and print QA, and offline multi-file plus single-file packaging. Use when asked to visualize a report, match a research-page reference, build an institutional or editorial research microsite, convert a report to HTML/PDF, make report numbers auditable, choose non-generic charts, or package an interactive report that opens through file://.
 ---
 
 # Build Visual Research Report
@@ -15,7 +15,7 @@ Compile the report as evidence-backed data first, then render it through the bun
    If the report is a public-equity earnings review, also read [public-equity-earnings.md](references/public-equity-earnings.md) and use the `public-equity-earnings` preset.
 4. Select one concrete physical theme atom from the industry's causal machinery. Use the same object for every cover state. Never substitute a generic network, glowing orb, city skyline, or abstract geometry.
 5. Read [chart-router.md](references/chart-router.md) completely. Select each chart from the data shape and reader task. Do not default to line or bar charts.
-6. Read [design-system.md](references/design-system.md) completely. Choose a visual contract before coding: `editorial-longform` for reference-led paper pages and `institutional-rail` for dashboard-led research. If a reference is supplied, also read [editorial-longform.md](references/editorial-longform.md) completely and record the measured contract in `reference_contract`; reference fidelity outranks a default rail.
+6. Read [design-system.md](references/design-system.md) completely. Choose a visual contract before coding: `editorial-longform` for flat reference-led paper pages, `editorial-scrollspy` for long editorial reports that need a sticky chapter track, and `institutional-rail` for dashboard-led research. If a reference is supplied, also read [editorial-longform.md](references/editorial-longform.md) completely and record the measured contract in `reference_contract`; reference fidelity outranks a default rail.
 7. Build the site with the bundled scripts and template. Do not introduce a framework or remote CDN unless the user requests it. Figma is optional: when unavailable, continue with supplied assets, image generation, or the bundled engineering schematic, then export normally.
 8. Read [qa-and-packaging.md](references/qa-and-packaging.md) completely. Run deterministic validation, build both deliverables, inspect responsive renders when browser automation is available, and report any remaining limitations.
 
@@ -42,7 +42,7 @@ Choose the most specific recognizable physical object that explains the industry
 3. Blueprint: engineering lines expose interfaces, constraints, and dimensions.
 4. Impact: an unboxing or arrival moment creates narrative force.
 
-Prefer four supplied or generated assets. Put their relative paths in `theme_atom.views[].asset`. The template supplies an honest diagrammatic fallback when assets are absent; treat that fallback as a draft, not a finished hero. All four views must depict the same object, not four adjacent industry concepts.
+Prefer four supplied or generated assets. Put their relative paths in `theme_atom.views[].asset`. When original artwork is unavailable, define `theme_atom.schematic` with normalized engineering parts and connections so the bundled SVG renderer can transform the same object across all four states. The legacy generic fallback remains a draft-only last resort. All four views must depict the same object, not four adjacent industry concepts.
 
 ## Build commands
 
@@ -75,6 +75,9 @@ Do not call the work complete until all of the following hold:
 - Every fact and source reference resolves.
 - Every chart type matches its declared data shape.
 - All four cover modes use the same theme atom.
+- A declared theme schematic reuses the same part IDs in every cover mode and remains legible with reduced motion.
+- Every `history-scrolly` scene resolves to an ordered data window and has a static reduced-motion fallback.
+- Every `causal-horizon-map` node, sparkline point, lag, and threshold resolves to the fact layer.
 - Clicking any marked number opens value, basis, date, and sources.
 - The source register has stable anchors.
 - The multi-file site and single-file report both build without external network dependencies.
