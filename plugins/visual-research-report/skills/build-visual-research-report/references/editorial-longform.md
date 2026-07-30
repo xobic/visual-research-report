@@ -18,9 +18,13 @@ Use a white paper surface, navy primary ink, cobalt emphasis, semantic red, rest
 
 The cover still uses the same theme atom across recursive, exploded, blueprint, and impact views. Keep the visual area editorial and object-led. Place the directory after the cover as a flat band; it is not sticky. If Figma cannot be reached, continue with supplied artwork, image generation, or the schematic fallback.
 
+When the supplied reference has a sticky chapter track, choose `editorial-scrollspy`. Preserve the same page, chart, prose, typography and whitespace measures; make only the chapter-link row sticky. Keep KPI and research-contract copy out of the sticky layer. On narrow screens the track scrolls horizontally inside its own region and must not create document-level overflow.
+
 ## Charts and evidence
 
 Chart plates may exceed the prose width but stay inside the 1120px measure. Every title has subtitle, source line, and optional analyst note. Every visible number maps to a fact and opens the same evidence drawer. Wide scorecards use a labeled internal scroller on narrow screens.
+
+For `history-scrolly`, the chart may stick within its plate while scene prose advances beside it. The sticky interval ends with the chart figure. Reduced-motion, small-screen and print variants show a static full-domain chart followed by the scene explanations.
 
 ## Print
 

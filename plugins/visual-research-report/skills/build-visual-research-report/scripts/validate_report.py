@@ -8,7 +8,7 @@ import json
 import math
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 
@@ -17,13 +17,22 @@ FACT_ID = re.compile(r"^F\d{2,}$")
 CHART_TYPES = {
     "entity-ramp", "destiny-flow", "timeline", "matrix-heat",
     "value-stack", "odds-board", "line", "paired-bars", "tension-balance",
+    "history-scrolly", "causal-horizon-map",
 }
 FACT_KINDS = {"reported", "estimate", "derived", "scenario", "threshold", "probability"}
 COVER_VIEWS = {"recursive", "exploded", "blueprint", "impact"}
+THEME_ATOM_PRODUCTION_MODES = {"image-2", "provided", "schematic"}
+IMAGE_2_MODEL = "gpt-image-2"
+IMAGE_2_WORKFLOW = "canonical-anchor-plus-direct-edits"
+IMAGE_2_INVARIANTS = {"identity_lock", "camera_lock"}
+IMAGE_2_FALLBACK = "schematic-explicit-only"
+IMAGE_OUTPUT_FORMATS = {"png", "jpeg", "webp"}
+IMAGE_ASSET_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 STACK_ENCODINGS = {"absolute", "share"}
 SOURCE_CLASSIFICATIONS = {"primary", "secondary"}
 CURRENT_SCHEMA = "visual-research-report@2"
-PRESENTATION_PRESETS = {"institutional-rail", "editorial-longform"}
+PRESENTATION_PRESETS = {"institutional-rail", "editorial-longform", "editorial-scrollspy", "editorial-dashboard"}
 EVIDENCE_STATUSES = {"verified", "mixed", "synthetic"}
 LOCATOR_KINDS = {"document", "dataset", "web", "audio-video", "visual"}
 EARNINGS_PRESET = "public-equity-earnings"
@@ -90,13 +99,343 @@ def _fact_ref(value: Any, path: str, fact_ids: set[str], errors: list[str], requ
         errors.append(f"{path} must reference an existing fact")
 
 
+def _validate_dashboard(
+    dashboard: Any,
+    path: str,
+    fact_ids: set[str],
+    fact_lookup: dict[str, dict[str, Any]],
+    errors: list[str],
+) -> None:
+    if dashboard is None:
+        return
+    if not isinstance(dashboard, dict):
+        errors.append(f"{path} must be an object")
+        return
+
+    _fact_ref(dashboard.get("primary_fact_id"), f"{path}.primary_fact_id", fact_ids, errors)
+
+    def validate_fact_list(key: str, minimum: int, maximum: int, *, required: bool) -> list[str]:
+        value = dashboard.get(key)
+        if value is None and not required:
+            return []
+        if not isinstance(value, list) or not minimum <= len(value) <= maximum:
+            errors.append(f"{path}.{key} must contain between {minimum} and {maximum} fact ids")
+            return []
+        if len(value) != len(set(value)):
+            errors.append(f"{path}.{key} must not contain duplicate fact ids")
+        _check_refs(value, fact_ids, f"{path}.{key}", errors, required=required)
+        return [item for item in value if isinstance(item, str) and item in fact_ids]
+
+    trend_ids = validate_fact_list("trend_fact_ids", 2, 12, required=False)
+    validate_fact_list("metric_fact_ids", 2, 4, required=True)
+    scenario_ids = validate_fact_list("scenario_fact_ids", 1, 3, required=False)
+
+    trend_units = {fact_lookup[fact_id].get("unit") for fact_id in trend_ids if fact_lookup.get(fact_id, {}).get("unit")}
+    if len(trend_units) > 1:
+        errors.append(f"{path}.trend_fact_ids must reference facts with one shared unit")
+    for fact_id in scenario_ids:
+        if fact_lookup.get(fact_id, {}).get("kind") != "probability":
+            errors.append(f"{path}.scenario_fact_ids must reference probability facts")
+
+
 def _number(value: Any, path: str, errors: list[str]) -> None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         errors.append(f"{path} must be numeric")
 
 
+def _normalized_number(value: Any, path: str, errors: list[str]) -> None:
+    if not _finite_number(value) or not 0 <= float(value) <= 100:
+        errors.append(f"{path} must be a finite number between 0 and 100")
+
+
 def _finite_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+
+
+def _validate_local_image_asset(value: Any, path: str, errors: list[str], *, required: bool) -> str | None:
+    """Return a normalized safe relative asset path, or record a contract error."""
+    if value is None and not required:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{path} must be a non-empty safe relative local image path")
+        return None
+    asset = value.strip()
+    if (
+        re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", asset)
+        or asset.startswith(("/", "//", "\\\\"))
+    ):
+        errors.append(f"{path} must be a safe relative local image path; remote, data, and absolute paths are forbidden")
+        return None
+    if "\\" in asset or "?" in asset or "#" in asset or any(ord(character) < 32 for character in asset):
+        errors.append(f"{path} must be a normalized relative local image path without backslashes, query strings, or fragments")
+        return None
+    normalized = PurePosixPath(asset)
+    if ".." in normalized.parts:
+        errors.append(f"{path} must not contain '..' path traversal")
+        return None
+    if normalized.name in {"", ".", ".."}:
+        errors.append(f"{path} must name a local image file")
+        return None
+    if normalized.suffix.lower() not in IMAGE_ASSET_SUFFIXES:
+        errors.append(f"{path} must use one of {sorted(IMAGE_ASSET_SUFFIXES)}")
+        return None
+    return normalized.as_posix()
+
+
+def _validate_string_array(
+    value: Any,
+    path: str,
+    errors: list[str],
+    *,
+    minimum: int = 1,
+) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or len(value) < minimum
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+    ):
+        errors.append(f"{path} must contain at least {minimum} non-empty string{'s' if minimum != 1 else ''}")
+        return []
+    normalized = [item.strip() for item in value]
+    if len(set(normalized)) != len(normalized):
+        errors.append(f"{path} must not contain duplicates")
+    return normalized
+
+
+def _validate_focal_point(value: Any, path: str, errors: list[str]) -> None:
+    if (
+        not isinstance(value, list)
+        or len(value) != 2
+        or not all(_finite_number(item) and 0 <= float(item) <= 1 for item in value)
+    ):
+        errors.append(f"{path} must contain exactly two finite numbers between 0 and 1")
+
+
+def _validate_canvas(value: Any, path: str, errors: list[str]) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        errors.append(f"{path} must be an object")
+        return None
+    for key in ("width", "height"):
+        dimension = value.get(key)
+        if not isinstance(dimension, int) or isinstance(dimension, bool) or dimension <= 0:
+            errors.append(f"{path}.{key} must be a positive integer")
+    if all(isinstance(value.get(key), int) and not isinstance(value.get(key), bool) and value[key] > 0 for key in ("width", "height")):
+        return {"width": value["width"], "height": value["height"]}
+    return None
+
+
+def _validate_identity_lock(
+    value: Any,
+    path: str,
+    schematic_part_ids: set[str],
+    errors: list[str],
+) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{path} must be an object for image-2 production")
+        return
+    _require_text(value, ("object_key", "physical_class", "silhouette"), path, errors)
+    locked_part_ids = _validate_string_array(value.get("part_ids"), f"{path}.part_ids", errors)
+    _validate_string_array(value.get("topology"), f"{path}.topology", errors)
+    _validate_string_array(value.get("materials"), f"{path}.materials", errors)
+    _validate_string_array(value.get("fiducials"), f"{path}.fiducials", errors, minimum=2)
+    if locked_part_ids and schematic_part_ids:
+        locked = set(locked_part_ids)
+        unknown = locked - schematic_part_ids
+        missing = schematic_part_ids - locked
+        if unknown:
+            errors.append(f"{path}.part_ids references unknown schematic parts: {sorted(unknown)}")
+        if missing:
+            errors.append(f"{path}.part_ids must include every canonical schematic part: {sorted(missing)}")
+
+
+def _validate_camera_lock(value: Any, path: str, errors: list[str]) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{path} must be an object for image-2 production")
+        return
+    _require_text(value, ("projection",), path, errors)
+    for key in ("yaw_deg", "pitch_deg", "roll_deg"):
+        if not _finite_number(value.get(key)):
+            errors.append(f"{path}.{key} must be a finite number")
+    focal_length = value.get("focal_length_equiv_mm")
+    if not _finite_number(focal_length) or float(focal_length) <= 0:
+        errors.append(f"{path}.focal_length_equiv_mm must be a positive finite number")
+    _validate_focal_point(value.get("object_center"), f"{path}.object_center", errors)
+    safe_margin = value.get("safe_margin")
+    if not _finite_number(safe_margin) or not 0 <= float(safe_margin) <= 0.4:
+        errors.append(f"{path}.safe_margin must be a finite number between 0 and 0.4")
+
+
+def _validate_sha256(value: Any, path: str, errors: list[str]) -> str | None:
+    if not isinstance(value, str) or not SHA256_HEX.fullmatch(value):
+        errors.append(f"{path} must be a lowercase 64-character SHA-256 hex digest")
+        return None
+    return value
+
+
+def _validate_theme_atom_production(
+    atom: dict[str, Any],
+    views: Any,
+    schematic_part_ids: set[str],
+    errors: list[str],
+) -> None:
+    production = atom.get("production")
+    mode: str | None = None
+    if production is not None:
+        if not isinstance(production, dict):
+            errors.append("theme_atom.production must be an object")
+        else:
+            candidate_mode = production.get("mode")
+            if candidate_mode not in THEME_ATOM_PRODUCTION_MODES:
+                errors.append(f"theme_atom.production.mode must be one of {sorted(THEME_ATOM_PRODUCTION_MODES)}")
+            else:
+                mode = candidate_mode
+
+    require_raster_views = mode in {"image-2", "provided"}
+    normalized_assets: list[tuple[str, str]] = []
+    for index, view in enumerate(views if isinstance(views, list) else []):
+        if not isinstance(view, dict):
+            continue
+        path = f"theme_atom.views[{index}]"
+        asset = _validate_local_image_asset(view.get("asset"), f"{path}.asset", errors, required=require_raster_views)
+        if asset:
+            normalized_assets.append((path, asset))
+        if require_raster_views:
+            _validate_focal_point(view.get("focal_point"), f"{path}.focal_point", errors)
+
+    seen_assets: dict[str, str] = {}
+    for path, asset in normalized_assets:
+        asset_key = asset.casefold()
+        if asset_key in seen_assets:
+            errors.append(f"{path}.asset duplicates {seen_assets[asset_key]}.asset ({asset!r})")
+        else:
+            seen_assets[asset_key] = path
+
+    if not isinstance(production, dict) or mode is None:
+        return
+    if mode == "schematic":
+        if not isinstance(atom.get("schematic"), dict):
+            errors.append("theme_atom.schematic is required when theme_atom.production.mode is 'schematic'")
+        return
+
+    canvas = _validate_canvas(production.get("canvas"), "theme_atom.production.canvas", errors)
+    print_view_id = production.get("print_view_id")
+    if print_view_id not in COVER_VIEWS:
+        errors.append(f"theme_atom.production.print_view_id must be one of {sorted(COVER_VIEWS)}")
+
+    for field in ("output_format", "master_format", "delivery_format"):
+        value = production.get(field)
+        if value is not None and value not in IMAGE_OUTPUT_FORMATS:
+            errors.append(f"theme_atom.production.{field} must be one of {sorted(IMAGE_OUTPUT_FORMATS)}")
+
+    if mode == "provided":
+        return
+
+    if production.get("model") != IMAGE_2_MODEL:
+        errors.append(f"theme_atom.production.model must be {IMAGE_2_MODEL!r} for image-2 production")
+    if production.get("workflow") != IMAGE_2_WORKFLOW:
+        errors.append(f"theme_atom.production.workflow must be {IMAGE_2_WORKFLOW!r} for image-2 production")
+    master_format = production.get("master_format")
+    delivery_format = production.get("delivery_format")
+    if master_format != "png":
+        errors.append("theme_atom.production.master_format must be 'png' for image-2 source masters")
+    if delivery_format != "webp":
+        errors.append("theme_atom.production.delivery_format must be 'webp' for optimized delivery")
+    if production.get("fallback") != IMAGE_2_FALLBACK:
+        errors.append(f"theme_atom.production.fallback must be {IMAGE_2_FALLBACK!r} for image-2 production")
+    if not isinstance(atom.get("schematic"), dict):
+        errors.append("theme_atom.schematic is required as the explicit image-2 fallback")
+
+    prompt_version = production.get("prompt_version")
+    if not isinstance(prompt_version, str) or not prompt_version.strip():
+        errors.append("theme_atom.production.prompt_version must be a non-empty string")
+        prompt_version = None
+    else:
+        prompt_version = prompt_version.strip()
+
+    anchor_asset = _validate_local_image_asset(
+        production.get("anchor_asset"), "theme_atom.production.anchor_asset", errors, required=True
+    )
+    _validate_local_image_asset(
+        production.get("contact_sheet_asset"), "theme_atom.production.contact_sheet_asset", errors, required=False
+    )
+    if anchor_asset and master_format == "png" and PurePosixPath(anchor_asset).suffix.lower() != ".png":
+        errors.append("theme_atom.production.anchor_asset extension must match master_format 'png'")
+    if anchor_asset and anchor_asset.casefold() in seen_assets:
+        errors.append("theme_atom.production.anchor_asset must be distinct from all four output assets")
+
+    _validate_identity_lock(atom.get("identity_lock"), "theme_atom.identity_lock", schematic_part_ids, errors)
+    _validate_camera_lock(atom.get("camera_lock"), "theme_atom.camera_lock", errors)
+
+    expected_master_suffixes = {
+        "png": {".png"},
+        "jpeg": {".jpg", ".jpeg"},
+        "webp": {".webp"},
+    }.get(master_format, set())
+    input_hashes: list[tuple[str, str]] = []
+    output_hashes: list[tuple[str, str]] = []
+    for index, view in enumerate(views if isinstance(views, list) else []):
+        if not isinstance(view, dict):
+            continue
+        path = f"theme_atom.views[{index}]"
+        view_id = view.get("id")
+        raw_asset = view.get("asset")
+        if isinstance(raw_asset, str) and expected_master_suffixes:
+            suffix = PurePosixPath(raw_asset.strip()).suffix.lower()
+            if suffix not in expected_master_suffixes:
+                errors.append(f"{path}.asset extension must match theme_atom.production.master_format {master_format!r}")
+        if "canvas" in view:
+            view_canvas = _validate_canvas(view.get("canvas"), f"{path}.canvas", errors)
+            if canvas and view_canvas and view_canvas != canvas:
+                errors.append(f"{path}.canvas must match theme_atom.production.canvas")
+
+        generation = view.get("generation")
+        if not isinstance(generation, dict):
+            errors.append(f"{path}.generation must be an object for image-2 production")
+            continue
+        if generation.get("operation") != "edit":
+            errors.append(f"{path}.generation.operation must be 'edit'")
+        parent_asset = _validate_local_image_asset(
+            generation.get("parent_asset"), f"{path}.generation.parent_asset", errors, required=True
+        )
+        if anchor_asset and parent_asset and parent_asset != anchor_asset:
+            errors.append(f"{path}.generation.parent_asset must equal theme_atom.production.anchor_asset")
+        expected_prompt_id = f"{prompt_version}/{view_id}" if prompt_version and isinstance(view_id, str) else None
+        if expected_prompt_id and generation.get("prompt_id") != expected_prompt_id:
+            errors.append(f"{path}.generation.prompt_id must be {expected_prompt_id!r}")
+        invariants = generation.get("invariants")
+        if (
+            not isinstance(invariants, list)
+            or len(invariants) != len(IMAGE_2_INVARIANTS)
+            or set(invariants) != IMAGE_2_INVARIANTS
+        ):
+            errors.append(f"{path}.generation.invariants must contain exactly {sorted(IMAGE_2_INVARIANTS)}")
+        if generation.get("qa_status") != "passed":
+            errors.append(f"{path}.generation.qa_status must be 'passed'")
+        input_hash = _validate_sha256(
+            generation.get("input_asset_sha256"), f"{path}.generation.input_asset_sha256", errors
+        )
+        output_hash = _validate_sha256(
+            generation.get("output_asset_sha256"), f"{path}.generation.output_asset_sha256", errors
+        )
+        if input_hash:
+            input_hashes.append((path, input_hash))
+        if output_hash:
+            output_hashes.append((path, output_hash))
+        if input_hash and output_hash and input_hash == output_hash:
+            errors.append(f"{path}.generation.output_asset_sha256 must differ from its anchor input digest")
+        if "canvas" in generation:
+            generation_canvas = _validate_canvas(generation.get("canvas"), f"{path}.generation.canvas", errors)
+            if canvas and generation_canvas and generation_canvas != canvas:
+                errors.append(f"{path}.generation.canvas must match theme_atom.production.canvas")
+
+    if len({digest for _, digest in input_hashes}) > 1:
+        errors.append("theme_atom.views generation input_asset_sha256 values must all identify the same canonical anchor")
+    seen_output_hashes: dict[str, str] = {}
+    for path, digest in output_hashes:
+        if digest in seen_output_hashes:
+            errors.append(f"{path}.generation.output_asset_sha256 duplicates {seen_output_hashes[digest]}.generation output")
+        else:
+            seen_output_hashes[digest] = path
 
 
 def _normalized_unit(value: Any) -> str | None:
@@ -427,6 +766,186 @@ def _validate_chart(
             errors.append(f"{path}.data line facts use inconsistent units: {sorted(units)}")
         _validate_scale(data.get("scale"), f"{path}.data.scale", line_values, errors, required=schema_v2)
 
+    elif chart_type == "history-scrolly":
+        series = data.get("series")
+        names: set[str] = set()
+        colors: set[str] = set()
+        units: set[str] = set()
+        history_values: list[float] = []
+        first_series_labels: list[str] = []
+        if not isinstance(series, list) or not series:
+            errors.append(f"{path}.data.series must be a non-empty array")
+        else:
+            for i, item in enumerate(series):
+                p = f"{path}.data.series[{i}]"
+                if not isinstance(item, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(item, ("name",), p, errors)
+                name = item.get("name")
+                if name in names:
+                    errors.append(f"{p}.name duplicates series {name!r}")
+                names.add(name)
+                color = item.get("color")
+                if color is not None:
+                    if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{3,8}|(?:rgb|hsl)a?\([^;{}]+\)|[a-zA-Z]+", color.strip()):
+                        errors.append(f"{p}.color must be a safe CSS color")
+                    elif color.lower() in colors:
+                        errors.append(f"{p}.color duplicates another series color")
+                    else:
+                        colors.add(color.lower())
+                points = item.get("points")
+                if not isinstance(points, list) or len(points) < 2:
+                    errors.append(f"{p}.points must contain at least two points")
+                    continue
+                point_labels: set[str] = set()
+                for j, point in enumerate(points):
+                    c = f"{p}.points[{j}]"
+                    if not isinstance(point, dict):
+                        errors.append(f"{c} must be an object")
+                        continue
+                    _require_text(point, ("label",), c, errors)
+                    label = point.get("label")
+                    if isinstance(label, str) and label.strip():
+                        if label in point_labels:
+                            errors.append(f"{c}.label duplicates point {label!r} in the same series")
+                        point_labels.add(label)
+                        if i == 0:
+                            first_series_labels.append(label)
+                    _number(point.get("value"), f"{c}.value", errors)
+                    fact_id = point.get("fact_id")
+                    _fact_ref(fact_id, f"{c}.fact_id", fact_ids, errors)
+                    _assert_mark_matches_fact(point.get("value"), fact_id, fact_lookup, c, errors)
+                    if _finite_number(point.get("value")):
+                        history_values.append(float(point["value"]))
+                    unit = _fact_unit(fact_id, fact_lookup)
+                    if unit:
+                        units.add(unit)
+        if len(units) > 1 and not data.get("allow_mixed_units"):
+            errors.append(f"{path}.data history facts use inconsistent units: {sorted(units)}")
+        _validate_scale(data.get("scale"), f"{path}.data.scale", history_values, errors, required=True)
+
+        scenes = data.get("scenes")
+        scene_ids: set[str] = set()
+        label_positions = {label: index for index, label in enumerate(first_series_labels)}
+        if not isinstance(scenes, list) or len(scenes) < 2:
+            errors.append(f"{path}.data.scenes must contain at least two scenes")
+        else:
+            for i, scene in enumerate(scenes):
+                p = f"{path}.data.scenes[{i}]"
+                if not isinstance(scene, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(scene, ("id", "title", "start_label", "end_label"), p, errors)
+                scene_id = scene.get("id")
+                if isinstance(scene_id, str) and scene_id.strip():
+                    if scene_id in scene_ids:
+                        errors.append(f"{p}.id duplicates scene {scene_id!r}")
+                    scene_ids.add(scene_id)
+                if "body" in scene and (not isinstance(scene["body"], str) or not scene["body"].strip()):
+                    errors.append(f"{p}.body must be a non-empty string")
+                _check_refs(scene.get("annotation_fact_ids"), fact_ids, f"{p}.annotation_fact_ids", errors)
+                start_label, end_label = scene.get("start_label"), scene.get("end_label")
+                if start_label not in label_positions:
+                    errors.append(f"{p}.start_label must exist in the first series")
+                if end_label not in label_positions:
+                    errors.append(f"{p}.end_label must exist in the first series")
+                if start_label in label_positions and end_label in label_positions:
+                    if label_positions[start_label] >= label_positions[end_label]:
+                        errors.append(f"{p} start_label must precede end_label in the first series")
+
+    elif chart_type == "causal-horizon-map":
+        horizons = data.get("horizons")
+        horizon_ids: set[str] = set()
+        if not isinstance(horizons, list) or len(horizons) < 2:
+            errors.append(f"{path}.data.horizons must contain at least two horizons")
+        else:
+            for i, horizon in enumerate(horizons):
+                p = f"{path}.data.horizons[{i}]"
+                if not isinstance(horizon, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(horizon, ("id", "label"), p, errors)
+                horizon_id = horizon.get("id")
+                if isinstance(horizon_id, str) and horizon_id.strip():
+                    if horizon_id in horizon_ids:
+                        errors.append(f"{p}.id duplicates horizon {horizon_id!r}")
+                    horizon_ids.add(horizon_id)
+
+        nodes = data.get("nodes")
+        node_ids: set[str] = set()
+        if not isinstance(nodes, list) or len(nodes) < 2:
+            errors.append(f"{path}.data.nodes must contain at least two nodes")
+        else:
+            for i, node in enumerate(nodes):
+                p = f"{path}.data.nodes[{i}]"
+                if not isinstance(node, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                _require_text(node, ("id", "label", "horizon_id", "direction", "confidence"), p, errors)
+                node_id = node.get("id")
+                if isinstance(node_id, str) and node_id.strip():
+                    if node_id in node_ids:
+                        errors.append(f"{p}.id duplicates node {node_id!r}")
+                    node_ids.add(node_id)
+                if node.get("horizon_id") not in horizon_ids:
+                    errors.append(f"{p}.horizon_id must reference a declared horizon")
+                if node.get("direction") not in {"up", "down", "mixed"}:
+                    errors.append(f"{p}.direction must be up, down, or mixed")
+                if node.get("confidence") not in {"low", "medium", "high"}:
+                    errors.append(f"{p}.confidence must be low, medium, or high")
+                _fact_ref(node.get("signal_fact_id"), f"{p}.signal_fact_id", fact_ids, errors)
+                _fact_ref(node.get("lag_fact_id"), f"{p}.lag_fact_id", fact_ids, errors, required=False)
+                _fact_ref(node.get("threshold_fact_id"), f"{p}.threshold_fact_id", fact_ids, errors, required=False)
+
+                sparkline = node.get("sparkline")
+                if not isinstance(sparkline, dict):
+                    errors.append(f"{p}.sparkline must be an object")
+                    continue
+                points = sparkline.get("points")
+                sparkline_values: list[float] = []
+                point_labels: set[str] = set()
+                if not isinstance(points, list) or len(points) < 2:
+                    errors.append(f"{p}.sparkline.points must contain at least two points")
+                else:
+                    for j, point in enumerate(points):
+                        c = f"{p}.sparkline.points[{j}]"
+                        if not isinstance(point, dict):
+                            errors.append(f"{c} must be an object")
+                            continue
+                        _require_text(point, ("label",), c, errors)
+                        label = point.get("label")
+                        if isinstance(label, str) and label.strip():
+                            if label in point_labels:
+                                errors.append(f"{c}.label duplicates point {label!r} in the same sparkline")
+                            point_labels.add(label)
+                        _number(point.get("value"), f"{c}.value", errors)
+                        fact_id = point.get("fact_id")
+                        _fact_ref(fact_id, f"{c}.fact_id", fact_ids, errors)
+                        _assert_mark_matches_fact(point.get("value"), fact_id, fact_lookup, c, errors)
+                        if _finite_number(point.get("value")):
+                            sparkline_values.append(float(point["value"]))
+                _validate_scale(
+                    sparkline.get("scale"), f"{p}.sparkline.scale", sparkline_values, errors, required=True,
+                )
+
+        edges = data.get("edges")
+        if not isinstance(edges, list) or not edges:
+            errors.append(f"{path}.data.edges must be a non-empty array")
+        else:
+            for i, edge in enumerate(edges):
+                p = f"{path}.data.edges[{i}]"
+                if not isinstance(edge, dict):
+                    errors.append(f"{p} must be an object")
+                    continue
+                source, target = edge.get("from"), edge.get("to")
+                if source not in node_ids or target not in node_ids:
+                    errors.append(f"{p} must connect declared nodes")
+                if source is not None and source == target:
+                    errors.append(f"{p} cannot connect a node to itself")
+                if "label" in edge and (not isinstance(edge["label"], str) or not edge["label"].strip()):
+                    errors.append(f"{p}.label must be a non-empty string")
+
     elif chart_type == "paired-bars":
         items = data.get("items")
         scale = data.get("scale")
@@ -580,6 +1099,65 @@ def validate_report(data: dict[str, Any]) -> tuple[list[str], list[str]]:
                 if isinstance(view, dict):
                     _require_text(view, ("id", "label", "alt"), f"theme_atom.views[{index}]", errors)
 
+        schematic = atom.get("schematic")
+        schematic_part_ids: set[str] = set()
+        if schematic is not None:
+            if not isinstance(schematic, dict):
+                errors.append("theme_atom.schematic must be an object")
+            else:
+                view_box = schematic.get("view_box")
+                if (
+                    not isinstance(view_box, list)
+                    or len(view_box) != 2
+                    or not all(_finite_number(value) and float(value) > 0 for value in view_box)
+                ):
+                    errors.append("theme_atom.schematic.view_box must contain exactly two positive finite numbers")
+
+                parts = schematic.get("parts")
+                if not isinstance(parts, list) or not 2 <= len(parts) <= 12:
+                    errors.append("theme_atom.schematic.parts must contain between 2 and 12 parts")
+                else:
+                    for index, part in enumerate(parts):
+                        path = f"theme_atom.schematic.parts[{index}]"
+                        if not isinstance(part, dict):
+                            errors.append(f"{path} must be an object")
+                            continue
+                        _require_text(part, ("id", "label", "shape"), path, errors)
+                        part_id = part.get("id")
+                        if isinstance(part_id, str) and part_id.strip():
+                            if part_id in schematic_part_ids:
+                                errors.append(f"{path}.id duplicates part {part_id!r}")
+                            schematic_part_ids.add(part_id)
+                        shape = part.get("shape")
+                        if shape not in {"rect", "circle"}:
+                            errors.append(f"{path}.shape must be rect or circle")
+                        coordinate_keys = ("x", "y", "width") if shape == "circle" else ("x", "y", "width", "height")
+                        for key in coordinate_keys:
+                            _normalized_number(part.get(key), f"{path}.{key}", errors)
+                        if shape == "circle" and "height" in part:
+                            _normalized_number(part.get("height"), f"{path}.height", errors)
+                        role = part.get("role")
+                        if role is not None and role not in {"shell", "core", "interface", "detail"}:
+                            errors.append(f"{path}.role must be shell, core, interface, or detail")
+
+                connections = schematic.get("connections")
+                if connections is not None:
+                    if not isinstance(connections, list):
+                        errors.append("theme_atom.schematic.connections must be an array")
+                    else:
+                        for index, connection in enumerate(connections):
+                            path = f"theme_atom.schematic.connections[{index}]"
+                            if not isinstance(connection, dict):
+                                errors.append(f"{path} must be an object")
+                                continue
+                            source, target = connection.get("from"), connection.get("to")
+                            if source not in schematic_part_ids or target not in schematic_part_ids:
+                                errors.append(f"{path} must connect declared parts")
+                            if source is not None and source == target:
+                                errors.append(f"{path} cannot connect a part to itself")
+
+        _validate_theme_atom_production(atom, views, schematic_part_ids, errors)
+
     sources = data.get("sources")
     source_ids = _ids(sources, "sources", SOURCE_ID, errors)
     source_lookup = {source["id"]: source for source in sources or [] if isinstance(source, dict) and isinstance(source.get("id"), str)}
@@ -694,10 +1272,13 @@ def validate_report(data: dict[str, Any]) -> tuple[list[str], list[str]]:
                 errors.append(f"{path} must be an object")
                 continue
             _require_text(section, ("id", "eyebrow", "title", "dek"), path, errors)
+            if "nav_label" in section and (not isinstance(section.get("nav_label"), str) or not section["nav_label"].strip()):
+                errors.append(f"{path}.nav_label must be a non-empty string")
             section_id = section.get("id")
             if section_id in section_ids:
                 errors.append(f"duplicate section id: {section_id}")
             section_ids.add(section_id)
+            _validate_dashboard(section.get("dashboard"), f"{path}.dashboard", fact_ids, fact_lookup, errors)
             body = section.get("body")
             if not isinstance(body, list) or not body:
                 errors.append(f"{path}.body must be a non-empty array")

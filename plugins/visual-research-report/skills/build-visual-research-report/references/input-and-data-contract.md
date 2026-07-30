@@ -8,9 +8,9 @@ Compile the factual layer before touching presentation code. The minimum input i
 - `meta`: `title`, `subtitle`, `kicker`, `publisher`, `as_of`, `language`, and `summary`.
 - `evidence_status`: `verified`, `mixed`, or `synthetic`.
 - `data_disclosure`: required for `mixed` and `synthetic`; provide `label`, `scope`, and placements such as `top-banner`, `methodology`, and `package-manifest`.
-- `presentation`: `preset` is `institutional-rail` or `editorial-longform`; optional `reference_contract` records the supplied reference and measured geometry.
+- `presentation`: `preset` is `institutional-rail`, `editorial-longform`, `editorial-scrollspy`, or `editorial-dashboard`; optional `reference_contract` records the supplied reference and measured geometry.
 - `ui_labels` (optional): string-to-string overrides for interface copy. The renderer supplies complete `en-US` and `zh-CN` dictionaries, selected from `meta.language`.
-- `theme_atom`: `name`, `description`, and exactly four `views` with IDs `recursive`, `exploded`, `blueprint`, and `impact`.
+- `theme_atom`: `name`, `description`, and exactly four `views` with IDs `recursive`, `exploded`, `blueprint`, and `impact`; `production` declares `image-2`, supplied, or schematic rendering; optional `identity_lock`, `camera_lock`, and `schematic` preserve one physical object across states.
 - `sources`: stable `Sxx` source records.
 - `facts`: stable `Fxx` quantitative records.
 - `kpis`: fact IDs used in the research rail.
@@ -88,9 +88,128 @@ For `line`, series names and optional colors must be unique. Referenced facts mu
 
 Every displayed numeric mark must resolve to one fact. Matrix scores, tripwires, balance weights, paired values, derived multipliers, odds, and table cells are never exempt. A decorative shape may omit a fact only when it contains no visible number.
 
+### Scroll-driven history
+
+Use `history-scrolly` when the reader must understand regimes or phases rather than inspect one static trend. Its `data` contains:
+
+- an `actual` scale;
+- one or more uniquely named series, each with at least two `{ "label", "value", "fact_id" }` points;
+- at least two ordered scenes with unique `id`, `title`, `start_label`, and `end_label` values that resolve to labels in the first series;
+- optional scene `body` and `annotation_fact_ids`.
+
+Scenes select a focus window; they do not create new data. Reduced-motion and print output show the complete history while keeping every scene explanation readable.
+
+### Causal-horizon map
+
+Use `causal-horizon-map` when signals move through distinct time horizons with explicit direction, lag, threshold, and evidence strength. Its `data` contains:
+
+- at least two unique horizons `{ "id", "label" }`;
+- at least two nodes with unique `id`, `label`, `horizon_id`, `direction` (`up`, `down`, or `mixed`), `confidence` (`low`, `medium`, or `high`), and `signal_fact_id`;
+- optional `lag_fact_id` and `threshold_fact_id` rather than untraceable numeric strings;
+- a node sparkline with an actual scale and at least two fact-bound points;
+- at least one directed edge whose `from` and `to` resolve to different nodes.
+
+The map visualizes an analytical causal hypothesis, not proof of causality. State that limitation in the chart note or methodology.
+
+## Image 2 cover production
+
+Use `theme_atom.production.mode: "image-2"` for generated production artwork. Image 2 generation happens before the offline build; the builder never calls an external image API. Freeze one canonical identity anchor and derive all four states as direct edits of that anchor:
+
+```json
+{
+  "identity_lock": {
+    "object_key": "chip-package-v1",
+    "physical_class": "assembled 2.5D semiconductor package",
+    "silhouette": "low rectangular substrate with one clipped corner",
+    "part_ids": ["substrate", "interposer", "compute", "memory-a", "memory-b"],
+    "topology": ["compute and memory on interposer", "interposer on substrate"],
+    "materials": ["graphite silicon", "navy memory", "green-black substrate", "copper routing"],
+    "fiducials": ["one clipped lower-left corner", "six gold near-edge pads"]
+  },
+  "camera_lock": {
+    "projection": "orthographic-like three-quarter product view",
+    "yaw_deg": 35,
+    "pitch_deg": 27,
+    "roll_deg": 0,
+    "focal_length_equiv_mm": 85,
+    "object_center": [0.5, 0.51],
+    "safe_margin": 0.1
+  },
+  "production": {
+    "mode": "image-2",
+    "model": "gpt-image-2",
+    "workflow": "canonical-anchor-plus-direct-edits",
+    "anchor_asset": "theme-atom/identity-anchor.png",
+    "prompt_version": "atom-cover-v1",
+    "canvas": {"width": 1448, "height": 1086},
+    "master_format": "png",
+    "delivery_format": "webp",
+    "print_view_id": "recursive",
+    "fallback": "schematic-explicit-only"
+  }
+}
+```
+
+Each `image-2` or `provided` view adds `asset`, a required normalized `focal_point`, and generation provenance. `focal_point` may be omitted only in `schematic` mode:
+
+```json
+{
+  "id": "exploded",
+  "label": "Exploded assembly",
+  "alt": "The same package separated along its real assembly order.",
+  "asset": "theme-atom/exploded.png",
+  "focal_point": [0.5, 0.5],
+  "generation": {
+    "operation": "edit",
+    "parent_asset": "theme-atom/identity-anchor.png",
+    "prompt_id": "atom-cover-v1/exploded",
+    "invariants": ["identity_lock", "camera_lock"],
+    "qa_status": "passed",
+    "input_asset_sha256": "<sha256>",
+    "output_asset_sha256": "<sha256>"
+  }
+}
+```
+
+Image 2 mode is strict. The anchor and four state assets must be distinct, decodable local images inside the report directory. Remote URLs, data URIs, absolute paths and parent-directory traversal are invalid. All five files share one canvas/aspect ratio; every state preserves the declared identity and camera locks. Missing or rejected production imagery is an error, not permission to switch rendering modes. Keep full prompts in a generation sidecar when auditability matters; the data contract may retain stable prompt IDs and hashes.
+
+## Engineering schematic fallback
+
+When Image 2 is unavailable or the user explicitly selects an offline deterministic cover, set `theme_atom.production.mode: "schematic"`. Then `theme_atom.schematic` may define the physical object once and reuse it in every cover state:
+
+```json
+{
+  "view_box": [100, 100],
+  "parts": [
+    {"id":"substrate","label":"Substrate","shape":"rect","x":12,"y":62,"width":76,"height":18,"role":"shell"},
+    {"id":"die","label":"Compute die","shape":"rect","x":34,"y":32,"width":32,"height":24,"role":"core"}
+  ],
+  "connections": [{"from":"die","to":"substrate"}]
+}
+```
+
+Use two to twelve unique parts. Part coordinates are normalized from 0 to 100; `view_box` declares the positive SVG output extent. Shapes are limited to safe `rect` and `circle` primitives. Roles are `shell`, `core`, `interface`, or `detail`. The renderer owns recursive depth, exploded separation, blueprint drawing, and impact motion so authored geometry remains one object rather than four unrelated illustrations.
+
 ## Presentation and reference contract
 
-Use `presentation.preset: "editorial-longform"` for a flat research-paper page. The preset fixes the 1440px page, 1120px chart plate, and 720px prose measures and disables a persistent desktop rail. Use `institutional-rail` when the research dashboard is part of the reading task.
+Use `presentation.preset: "editorial-longform"` for a flat research-paper page. Use `editorial-scrollspy` when the same 1440px page, 1120px chart plate, and 720px prose measures need only a sticky segmented chapter track. Use `editorial-dashboard` when each chapter needs a persistent, synchronized evidence rail in addition to the chapter track. Use `institutional-rail` for a conventional persistent KPI/navigation rail.
+
+For `editorial-dashboard`, a section may provide a short `nav_label` plus a fact-only dashboard contract. Values, dates, labels, and sources always come from the referenced facts:
+
+```json
+{
+  "id": "capacity-system",
+  "nav_label": "Capacity",
+  "dashboard": {
+    "primary_fact_id": "F02",
+    "trend_fact_ids": ["F01", "F05", "F02"],
+    "metric_fact_ids": ["F06", "F08", "F09", "F10"],
+    "scenario_fact_ids": ["F03", "F21", "F22"]
+  }
+}
+```
+
+`primary_fact_id` is required when `dashboard` exists. `metric_fact_ids` contains two to four unique facts. Optional `trend_fact_ids` contains two to twelve ordered facts sharing one unit. Optional `scenario_fact_ids` contains one to three probability facts. If the entire `dashboard` object is absent, the renderer falls back deterministically to section facts and root KPIs; explicit configuration is preferred for production work.
 
 If the user supplies a screenshot or brand target, record it without turning pixel dimensions into arbitrary design knobs:
 

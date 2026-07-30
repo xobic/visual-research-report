@@ -2,7 +2,7 @@
   "schema": "visual-research-report@2",
   "evidence_status": "synthetic",
   "presentation": {
-    "preset": "editorial-longform"
+    "preset": "editorial-dashboard"
   },
   "data_disclosure": {
     "label": "Design demonstration · every numeric fact is synthetic",
@@ -26,12 +26,93 @@
     "name": "2.5D chip package",
     "description": "The package physically joins compute dies, memory, interposer and substrate, making it a useful atom for capacity, flow and value-capture analysis.",
     "material": "silicon · copper · epoxy",
+    "identity_lock": {
+      "object_key": "chip-package-v1",
+      "physical_class": "assembled exposed-die 2.5D semiconductor package",
+      "silhouette": "low rectangular green-black substrate with one clipped lower-left corner",
+      "part_ids": ["substrate", "interposer", "compute", "memory-a", "memory-b", "interface-via"],
+      "topology": [
+        "compute and both memory stacks sit on the interposer",
+        "the interposer sits on the organic substrate"
+      ],
+      "materials": ["matte graphite silicon", "navy stacked memory", "blue-black interposer", "green-black organic substrate", "copper routing"],
+      "fiducials": ["one clipped lower-left substrate corner", "one wide compute die left of center", "two equal memory stacks aligned on the right", "six gold contact pads on the near edge"]
+    },
+    "camera_lock": {
+      "projection": "orthographic-like three-quarter product view",
+      "yaw_deg": 35,
+      "pitch_deg": 27,
+      "roll_deg": 0,
+      "focal_length_equiv_mm": 85,
+      "object_center": [0.5, 0.51],
+      "safe_margin": 0.1
+    },
+    "production": {
+      "mode": "image-2",
+      "model": "gpt-image-2",
+      "engine": "built-in-image_gen",
+      "workflow": "canonical-anchor-plus-direct-edits",
+      "anchor_asset": "theme-atom-image2/identity-anchor.png",
+      "prompt_version": "atom-cover-v1",
+      "canvas": {"width": 1448, "height": 1086},
+      "master_format": "png",
+      "delivery_format": "webp",
+      "print_view_id": "recursive",
+      "fallback": "schematic-explicit-only",
+      "generated_at": "2026-07-29T08:54:00Z",
+      "contact_sheet_asset": "theme-atom-image2/contact-sheet.png"
+    },
     "views": [
-      {"id": "recursive", "label": "Recursive system", "alt": "A schematic 2.5D chip package repeating into a larger system"},
-      {"id": "exploded", "label": "Exploded assembly", "alt": "A schematic exploded view of the same 2.5D chip package"},
-      {"id": "blueprint", "label": "Engineering blueprint", "alt": "A schematic blueprint of the same 2.5D chip package"},
-      {"id": "impact", "label": "Arrival impact", "alt": "A schematic arrival view of the same 2.5D chip package"}
-    ]
+      {
+        "id": "recursive",
+        "label": "Recursive system",
+        "alt": "The same 2.5D chip package repeating at smaller scales into its physical system",
+        "asset": "theme-atom-image2/recursive.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/recursive","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"729f47149c1c1a4106c2e389574d72b9fae96b6b79ad97f5f64210f7eee7197a"}
+      },
+      {
+        "id": "exploded",
+        "label": "Exploded assembly",
+        "alt": "The same package separated into compute, memory, interposer and substrate along its real assembly axis",
+        "asset": "theme-atom-image2/exploded.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/exploded","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"859c7bd635866fe47d6cbff7ca24de190aa6bb6d05ac3f60ad447c3de92433fa"}
+      },
+      {
+        "id": "blueprint",
+        "label": "Engineering blueprint",
+        "alt": "A cobalt engineering-line treatment of the same assembled 2.5D chip package",
+        "asset": "theme-atom-image2/blueprint.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/blueprint","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"57c4659fe79732dfb26ce303ca31348109fe6d07ebcc59d60d552d173f3aee78"}
+      },
+      {
+        "id": "impact",
+        "label": "Arrival impact",
+        "alt": "The same assembled package rising from a black antistatic semiconductor carrier tray",
+        "asset": "theme-atom-image2/impact.png",
+        "focal_point": [0.5, 0.5],
+        "generation": {"operation":"edit","parent_asset":"theme-atom-image2/identity-anchor.png","prompt_id":"atom-cover-v1/impact","invariants":["identity_lock","camera_lock"],"qa_status":"passed","generated_at":"2026-07-29T08:54:00Z","input_asset_sha256":"173aab81e81b1ae79c4826a2b82ca0f4c1f4d4307a478d6982a7f688a71e7219","output_asset_sha256":"f0b845790055ea3e34425cd5e515079cfd8de4c4894e77b2341f8fa9a7f9e5ce"}
+      }
+    ],
+    "schematic": {
+      "view_box": [100, 100],
+      "parts": [
+        {"id":"substrate","label":"Package substrate","shape":"rect","x":10,"y":70,"width":80,"height":16,"role":"shell"},
+        {"id":"interposer","label":"Silicon interposer","shape":"rect","x":18,"y":58,"width":64,"height":8,"role":"interface"},
+        {"id":"compute","label":"Compute die","shape":"rect","x":28,"y":37,"width":24,"height":17,"role":"core"},
+        {"id":"memory-a","label":"Memory stack A","shape":"rect","x":57,"y":39,"width":11,"height":15,"role":"core"},
+        {"id":"memory-b","label":"Memory stack B","shape":"rect","x":71,"y":39,"width":11,"height":15,"role":"core"},
+        {"id":"interface-via","label":"Vertical interface","shape":"circle","x":54,"y":62,"width":3,"role":"detail"}
+      ],
+      "connections": [
+        {"from":"compute","to":"interposer"},
+        {"from":"memory-a","to":"interposer"},
+        {"from":"memory-b","to":"interposer"},
+        {"from":"interposer","to":"substrate"}
+      ]
+    }
   },
   "sources": [
     {
@@ -108,27 +189,57 @@
   ],
   "kpis": ["F02", "F04", "F03"],
   "sections": [
-    {
-      "id": "capacity-system",
-      "eyebrow": "01 / Capacity",
-      "title": "Capacity arrives as physical packages, not a smooth curve",
-      "dek": "The entity ramp and process flow expose the discreteness and attrition hidden by aggregate forecasts.",
+  {
+    "id": "capacity-system",
+    "nav_label": "Capacity",
+    "eyebrow": "01 / Capacity",
+    "title": "Capacity arrives as physical packages, not a smooth curve",
+    "dek": "The entity ramp and process flow expose the discreteness and attrition hidden by aggregate forecasts.",
+    "dashboard": {
+      "primary_fact_id": "F02",
+      "trend_fact_ids": ["F01", "F05", "F02"],
+      "metric_fact_ids": ["F06", "F08", "F09", "F10"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"paragraph","text":"This synthetic example treats the 2.5D package as the unit of analysis. Capacity expands in steps, while lots are lost between input, assembly, qualification and shipment.","fact_ids":["F01","F02"]},
         {"type":"quote","text":"All figures in this demonstration are synthetic and exist only to test the plugin.","source_ids":["S01"]}
       ],
       "charts": [
         {"id":"C01","type":"entity-ramp","title":"Nameplate capacity triples in two synthetic steps","subtitle":"Synthetic period-end capacity; thousand packages per month","source_ids":["S01"],"note":"One glyph represents two thousand packages of monthly capacity.","data":{"entity_label":"capacity units","unit_size":2,"periods":[{"label":"2024","value":12,"display":"12k / month","fact_id":"F01"},{"label":"2025","value":22,"display":"22k / month","fact_id":"F05"},{"label":"2026E","value":36,"display":"36k / month","fact_id":"F02"}]}},
-        {"id":"C02","type":"destiny-flow","title":"The physical flow narrows before shipment","subtitle":"Synthetic lots moving through the package system, 2026-Q2","source_ids":["S01"],"data":{"nodes":[{"id":"compute","label":"Compute dies","stage":"Inputs","value":80,"display":"80 lots","fact_id":"F06"},{"id":"memory","label":"Memory stacks","stage":"Inputs","value":72,"display":"72 lots","fact_id":"F07"},{"id":"assembly","label":"Integrated packages","stage":"Assembly","value":64,"display":"64 lots","fact_id":"F08"},{"id":"qualified","label":"Qualified output","stage":"Qualification","value":58,"display":"58 lots","fact_id":"F09"},{"id":"shipped","label":"Shipped systems","stage":"Destination","value":54,"display":"54 lots","fact_id":"F10"}],"links":[{"source":"compute","target":"assembly","value":64},{"source":"memory","target":"assembly","value":64},{"source":"assembly","target":"qualified","value":58},{"source":"qualified","target":"shipped","value":54}]}}
+        {"id":"C02","type":"destiny-flow","title":"The physical flow narrows before shipment","subtitle":"Synthetic lots moving through the package system, 2026-Q2","source_ids":["S01"],"data":{"nodes":[{"id":"compute","label":"Compute dies","stage":"Inputs","value":80,"display":"80 lots","fact_id":"F06"},{"id":"memory","label":"Memory stacks","stage":"Inputs","value":72,"display":"72 lots","fact_id":"F07"},{"id":"assembly","label":"Integrated packages","stage":"Assembly","value":64,"display":"64 lots","fact_id":"F08"},{"id":"qualified","label":"Qualified output","stage":"Qualification","value":58,"display":"58 lots","fact_id":"F09"},{"id":"shipped","label":"Shipped systems","stage":"Destination","value":54,"display":"54 lots","fact_id":"F10"}],"links":[{"source":"compute","target":"assembly","value":64},{"source":"memory","target":"assembly","value":64},{"source":"assembly","target":"qualified","value":58},{"source":"qualified","target":"shipped","value":54}]}},
+        {
+          "id":"C11",
+          "type":"causal-horizon-map",
+          "title":"Signals move from demand to qualified capacity with a lag",
+          "subtitle":"Synthetic causal hypothesis; fact-bound signal, lag, threshold and sparklines",
+          "source_ids":["S01","S02"],
+          "note":"Edges encode the report's analytical hypothesis and do not establish statistical causality.",
+          "data":{
+            "horizons":[{"id":"leading","label":"Leading signal"},{"id":"conversion","label":"Physical conversion"}],
+            "nodes":[
+              {"id":"demand-signal","label":"Demand signal","horizon_id":"leading","direction":"up","confidence":"high","signal_fact_id":"F26","sparkline":{"scale":{"mode":"actual","domain":[0,100],"ticks":[0,50,100]},"points":[{"label":"2023","value":40,"fact_id":"F23"},{"label":"2024","value":55,"fact_id":"F24"},{"label":"2025","value":78,"fact_id":"F25"},{"label":"2026E","value":96,"fact_id":"F26"}]}},
+              {"id":"capacity-response","label":"Qualified capacity response","horizon_id":"conversion","direction":"mixed","confidence":"medium","signal_fact_id":"F38","lag_fact_id":"F31","threshold_fact_id":"F43","sparkline":{"scale":{"mode":"actual","domain":[0,100],"ticks":[0,50,100]},"points":[{"label":"2023","value":31,"fact_id":"F35"},{"label":"2024","value":45,"fact_id":"F36"},{"label":"2025","value":59,"fact_id":"F37"},{"label":"2026E","value":76,"fact_id":"F38"}]}}
+            ],
+            "edges":[{"from":"demand-signal","to":"capacity-response","label":"qualification lag"}]
+          }
+        }
       ],
       "annotation": "The entity view makes capacity additions legible; the flow view prevents the reader from treating nameplate capacity as sellable output.",
       "takeaways": ["Track physical bottlenecks separately from announced capacity.", "Do not equate installed tools with qualified shipment volume."]
     },
-    {
-      "id": "competition-value",
-      "eyebrow": "02 / Positioning",
-      "title": "Competitive advantage changes by dimension and layer",
-      "dek": "A matrix supports multi-dimensional scanning; a value stack preserves the physical order of the package.",
+  {
+    "id": "competition-value",
+    "nav_label": "Positioning",
+    "eyebrow": "02 / Positioning",
+    "title": "Competitive advantage changes by dimension and layer",
+    "dek": "A matrix supports multi-dimensional scanning; a value stack preserves the physical order of the package.",
+    "dashboard": {
+      "primary_fact_id": "F20",
+      "trend_fact_ids": ["F17", "F18", "F19", "F20"],
+      "metric_fact_ids": ["F13", "F15", "F11", "F14"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"paragraph","text":"Synthetic vendor scores show that leadership is not one-dimensional. The value pool also concentrates in later assembly, test and qualification steps.","fact_ids":["F13","F15","F20"]}
       ],
@@ -139,27 +250,59 @@
       "annotation": "Heat intensity supports scanning, but every cell retains its number. The stack is ordered by the physical assembly rather than by visual size.",
       "takeaways": ["Benchmark by constraint, not by a single composite score.", "Map economics onto the physical package before discussing market share."]
     },
-    {
-      "id": "history-scenarios",
-      "eyebrow": "03 / Timing",
-      "title": "History explains the setup; probabilities expose the judgment",
-      "dek": "The timeline separates sequence from forecast, while the odds board makes scenario assumptions explicit.",
+  {
+    "id": "history-scenarios",
+    "nav_label": "Timing",
+    "eyebrow": "03 / Timing",
+    "title": "History explains the setup; probabilities expose the judgment",
+    "dek": "The timeline separates sequence from forecast, while the odds board makes scenario assumptions explicit.",
+    "dashboard": {
+      "primary_fact_id": "F03",
+      "trend_fact_ids": ["F23", "F24", "F25", "F26"],
+      "metric_fact_ids": ["F26", "F30", "F31", "F32"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"callout","title":"Interpretation boundary","text":"A probability is an analyst judgment as of a date, not a reported future fact.","fact_ids":["F03"]}
       ],
       "charts": [
         {"id":"C05","type":"timeline","title":"Three synthetic steps create the current capacity regime","subtitle":"Illustrative events and observation dates","source_ids":["S01"],"data":{"events":[{"date":"2024","title":"Baseline installed","description":"The demonstration begins at twelve thousand packages per month.","fact_id":"F01","source_ids":["S01"]},{"date":"2025","title":"Second module qualifies","description":"Capacity rises after a discrete qualification step.","fact_id":"F05","source_ids":["S01"]},{"date":"2026E","title":"Third module enters estimate","description":"Estimated nameplate capacity reaches thirty-six thousand per month.","fact_id":"F02","source_ids":["S01"]}]}},
+        {
+          "id":"C10",
+          "type":"history-scrolly",
+          "title":"Demand and supply separate across two regimes",
+          "subtitle":"Synthetic annual index; scroll scenes focus the ordered history without mutating the data",
+          "source_ids":["S01"],
+          "data":{
+            "scale":{"mode":"actual","domain":[0,100],"ticks":[0,20,40,60,80,100],"unit":"index points"},
+            "series":[
+              {"name":"Demand","color":"#1457ff","points":[{"label":"2023","value":40,"fact_id":"F23"},{"label":"2024","value":55,"fact_id":"F24"},{"label":"2025","value":78,"fact_id":"F25"},{"label":"2026E","value":96,"fact_id":"F26"}]},
+              {"name":"Supply","color":"#d53c36","points":[{"label":"2023","value":43,"fact_id":"F27"},{"label":"2024","value":48,"fact_id":"F28"},{"label":"2025","value":63,"fact_id":"F29"},{"label":"2026E","value":82,"fact_id":"F30"}]}
+            ],
+            "scenes":[
+              {"id":"baseline","title":"Baseline parity","body":"Demand and supply start close together before the qualification constraint becomes visible.","start_label":"2023","end_label":"2024"},
+              {"id":"divergence","title":"Constraint-driven divergence","body":"Demand accelerates faster than supply as physical qualification gates the response.","start_label":"2024","end_label":"2026E"}
+            ]
+          }
+        },
         {"id":"C06","type":"odds-board","title":"The largest synthetic risk is a supply bottleneck","subtitle":"Illustrative twelve-month probabilities as of 2026-07-27","source_ids":["S02"],"data":{"items":[{"label":"Supply bottleneck persists","probability":0.65,"horizon":"12 months","trigger":"Qualification slips","fact_id":"F03"},{"label":"Yield improves faster","probability":0.52,"horizon":"12 months","trigger":"Defect density falls","fact_id":"F21"},{"label":"Demand exceeds base case","probability":0.38,"horizon":"12 months","trigger":"Accelerator orders accelerate","fact_id":"F22"}]}},
         {"id":"C09","type":"tension-balance","title":"The thesis balances operating upside against qualification risk","subtitle":"Synthetic analyst conviction on an actual 0–5 score scale","source_ids":["S02"],"data":{"center_label":"Qualification timing determines whether installed capacity becomes economic output","scale":{"mode":"actual","domain":[0,5],"ticks":[0,1,2,3,4,5],"unit":"score"},"long":[{"label":"Yield improvement","fact_id":"F39"},{"label":"Demand durability","fact_id":"F40"}],"short":[{"label":"Qualification delay","fact_id":"F41"},{"label":"Capital intensity","fact_id":"F42"}],"tripwires":[{"label":"Utilization falls below the modeled threshold","fact_id":"F43"}]}}
       ],
       "annotation": "The visual grammar deliberately separates dated observations from forward-looking odds.",
       "takeaways": ["Tie every probability to a horizon and observable trigger.", "Update the odds board when evidence changes, not on a fixed aesthetic cadence."]
     },
-    {
-      "id": "precision-window",
-      "eyebrow": "04 / Precision",
-      "title": "Use conventional charts only when exact reading is the task",
-      "dek": "A line chart is justified for the demand-supply path; paired bars are justified for explicit scenario comparisons.",
+  {
+    "id": "precision-window",
+    "nav_label": "Precision",
+    "eyebrow": "04 / Precision",
+    "title": "Use conventional charts only when exact reading is the task",
+    "dek": "A line chart is justified for the demand-supply path; paired bars are justified for explicit scenario comparisons.",
+    "dashboard": {
+      "primary_fact_id": "F26",
+      "trend_fact_ids": ["F23", "F24", "F25", "F26"],
+      "metric_fact_ids": ["F26", "F30", "F31", "F32"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"paragraph","text":"The line chart is not a default. It appears here because the exact gap across ordered years matters. The paired bars exist because two named cases must be compared directly.","fact_ids":["F26","F30","F31","F32"]}
       ],
@@ -174,11 +317,12 @@
   "methodology": [
     "All values are synthetic and were chosen to exercise the plugin's validation, chart routing and evidence drawer.",
     "The example preserves numeric machine values separately from display formatting.",
-    "Probabilities are illustrative analyst judgments with an explicit as-of date and horizon."
+    "Probabilities are illustrative analyst judgments with an explicit as-of date and horizon.",
+    "Causal-horizon edges encode an analytical hypothesis and do not establish statistical causality."
   ],
   "disclosures": [
     "This is a software demonstration, not investment research or a factual semiconductor dataset.",
     "No synthetic number should be copied into a real report without replacement and source verification.",
-    "Cover views use the built-in schematic fallback because no generated or supplied hero assets are bundled."
+    "Cover views were generated with Image 2 from one canonical identity anchor; the bundled engineering schematic remains an explicit fallback and is not the active renderer."
   ]
 }

@@ -4,15 +4,17 @@ Use the bundled tokens and components as a restrained publication system: paper-
 
 ## Layout contracts
 
-- `editorial-longform`: reference-led flat paper, 1440px page, 1120px chart plate, 720px prose, white background, navy ink, cobalt emphasis, semantic red, and a non-sticky directory band. Use it for the long Chinese editorial research page shown in a supplied reference.
+- `editorial-longform`: reference-led flat paper, 1440px page, 1120px chart plate, 720px prose, white background, navy ink, cobalt emphasis, semantic red, and a non-sticky directory band.
+- `editorial-scrollspy`: the same editorial measures and visual language, with a restrained sticky segmented chapter track. Use it only when navigation materially improves a long report or the supplied reference uses scroll-position feedback.
+- `editorial-dashboard`: a 1440px editorial argument page with a 25–32% chapter-synchronized evidence rail, a compact sticky chapter track, and the first evidence visual inside the chapter opener viewport. Use it when persistent current readings, chapter indicators, and probability paths materially support the reading task.
 - `institutional-rail`: dashboard-led layout with a sticky desktop rail and wider interactive cover. Use it only when persistent navigation and KPIs materially help the task.
 
-Read [editorial-longform.md](editorial-longform.md) for reference measurement, print, and comparison rules. Do not combine the two contracts into a hybrid card dashboard.
+Read [editorial-longform.md](editorial-longform.md) for reference measurement, print, and comparison rules. Read [editorial-dashboard.md](editorial-dashboard.md) for the synchronized rail contract. `editorial-scrollspy` remains a navigation-only variant and must not silently acquire a dashboard.
 
 ## Hierarchy and layout
 
 - The cover establishes the theme atom and publication identity.
-- Immediately after the cover, place key numbers, contents, and the research contract. The institutional preset uses a sticky desktop rail. The editorial preset uses a flat directory band before the article and never introduces a dark side dashboard.
+- Immediately after the cover, place the appropriate research directory. The institutional preset uses a sticky desktop rail. `editorial-longform` uses a flat directory band; `editorial-scrollspy` turns only the chapter links into a sticky segmented track. `editorial-dashboard` separates a 50px chapter track from a white, rule-led evidence rail whose state follows the active chapter.
 - Keep prose at its readable measure and allow chart plates to widen independently.
 - Every chart includes title, subtitle, source line, and optional analyst note.
 - Stable source anchors use `#source-Sxx`.
@@ -20,6 +22,10 @@ Read [editorial-longform.md](editorial-longform.md) for reference measurement, p
 ## Cover system
 
 The four cover tabs show the same real object as recursive system, exploded physical view, engineering blueprint, and impact/unboxing moment. Tabs use `role=tab`, matching tabpanels, roving `tabindex`, ArrowLeft/ArrowRight and Home/End. The active view is never conveyed by color alone. Honor reduced motion.
+
+Production raster covers use Image 2 with a canonical identity anchor plus four direct edits. Lock the object's silhouette, declared parts, topology, material language, fiducials, camera and safe area before generating states. The recursive view repeats exact copies; the exploded view separates only real declared parts; the blueprint changes rendering treatment without inventing pseudo-labels; the impact view changes the arrival context without deforming the assembled object. Do not accept a state with extra parts, missing parts, mirrored orientation, camera reversal, text, logos or watermarks.
+
+Use a restrained crossfade/scale transition between decoded assets and remove it under reduced motion. Respect each view's normalized focal point; blueprint may use `contain` against its declared field while product states use crop-safe `cover`. The engineering SVG renderer remains a complete explicit fallback, not the silent renderer for a missing Image 2 file.
 
 ## Evidence interaction
 

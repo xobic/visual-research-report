@@ -8,6 +8,54 @@ async page => {
   page.on('pageerror', error => consoleErrors.push(`pageerror: ${error.message}`));
   page.on('requestfailed', request => consoleErrors.push(`requestfailed: ${request.url()} ${request.failure()?.errorText || ''}`));
   const assert = (condition, message) => { if (!condition) failures.push(message); };
+  const coverModes = ['recursive', 'exploded', 'blueprint', 'impact'];
+  const waitForCoverReady = async label => {
+    try {
+      await page.waitForFunction(() => {
+        const stage = document.getElementById('cover-stage');
+        return stage?.dataset.coverReady === 'true' && stage.getAttribute('aria-busy') === 'false' && !stage.dataset.coverPending;
+      }, null, { timeout: 15000 });
+    } catch (_error) {
+      assert(false, `${label}: cover image did not reach a decoded, non-busy state`);
+    }
+  };
+  const readCoverState = () => page.evaluate(() => {
+    const stage = document.getElementById('cover-stage');
+    const visual = stage?.querySelector('[data-cover-visual].is-active');
+    const image = visual?.querySelector('.cover-image');
+    const src = image?.currentSrc || image?.src || '';
+    let sourceHash = 2166136261;
+    for (let index = 0; index < src.length; index += 1) {
+      sourceHash ^= src.charCodeAt(index);
+      sourceHash = Math.imul(sourceHash, 16777619);
+    }
+    const views = window.REPORT_DATA?.theme_atom?.views || [];
+    const productionMode = window.REPORT_DATA?.theme_atom?.production?.mode || '';
+    return {
+      mode: stage?.dataset.coverMode || '',
+      renderer: stage?.dataset.coverRenderer || '',
+      ready: stage?.dataset.coverReady === 'true',
+      busy: stage?.getAttribute('aria-busy') === 'true',
+      activeVisuals: stage?.querySelectorAll('[data-cover-visual].is-active').length || 0,
+      productionMode,
+      assetMode: productionMode === 'image-2' || views.some(view => Boolean(view?.asset)),
+      assetCount: views.filter(view => Boolean(view?.asset)).length,
+      image: image ? {
+        complete: image.complete,
+        decoded: image.dataset.coverDecoded === 'true',
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        sourceFingerprint: `${src.length}:${sourceHash >>> 0}`,
+        objectFit: getComputedStyle(image).objectFit,
+        objectPosition: getComputedStyle(image).objectPosition,
+        declaredWidth: image.getAttribute('width') || '',
+        declaredHeight: image.getAttribute('height') || '',
+      } : null,
+      schematicParts: visual?.querySelectorAll('.schematic-parts [data-part-id]').length || 0,
+      coverAnimations: [...(visual?.querySelectorAll('.atom-part') || [])].map(part => getComputedStyle(part).animationName),
+      coverTransitions: [...(stage?.querySelectorAll('[data-cover-visual],.cover-image') || [])].map(element => getComputedStyle(element).transitionDuration),
+    };
+  });
   const targets = [
     { name: 'site', path: 'site/index.html' },
     { name: 'single', path: 'report.html' },
@@ -25,17 +73,29 @@ async page => {
       await page.goto(`${baseUrl}/${target.path}`, { waitUntil: 'networkidle' });
       await page.waitForSelector('.report-section');
       await page.evaluate(() => document.fonts?.ready || Promise.resolve());
-      await page.waitForTimeout(100);
       const label = `${target.name}/${viewport.name}`;
+      await waitForCoverReady(label);
+      await page.waitForTimeout(100);
 
       await page.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-viewport.png` });
       screenshots += 1;
       const coverStage = page.locator('#cover-stage');
       await coverStage.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-cover.png` });
       screenshots += 1;
+      const initialCover = await readCoverState();
       const representative = page.locator('.chart-plate').first();
       await representative.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-chart.png` });
       screenshots += 1;
+      const historyPlate = page.locator('[data-chart-type="history-scrolly"]').first();
+      if (await historyPlate.count()) {
+        await historyPlate.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-history.png` });
+        screenshots += 1;
+      }
+      const causalPlate = page.locator('[data-chart-type="causal-horizon-map"]').first();
+      if (await causalPlate.count()) {
+        await causalPlate.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-causal.png` });
+        screenshots += 1;
+      }
       const matrix = page.locator('[data-contained-overflow="true"]').first();
       if (await matrix.count()) {
         await matrix.screenshot({ path: `${artifactDir}/${target.name}-${viewport.name}-matrix.png` });
@@ -45,8 +105,8 @@ async page => {
       const geometry = await page.evaluate(() => {
         const rail = document.querySelector('.research-rail');
         const firstSection = document.querySelector('.report-section');
-        const touchSelectors = '.fact-chip,.cover-switcher button,.drawer-close,.rail-nav a,.flow-link,.pair-control,.pair-multiplier,.heat-cell,.odds-card,.entity-period,.line-mark,.balance-weight,.tripwire';
-        const allowedOverflow = element => element.closest?.('.matrix-wrap,.line-wrap,.flow-grid');
+        const touchSelectors = '.fact-chip,.cover-switcher button,.drawer-close,.rail-nav a,.dashboard-primary,.dashboard-metric,.dashboard-signal,.dashboard-trend-mark,.flow-link,.pair-control,.pair-multiplier,.heat-cell,.odds-card,.entity-period,.line-mark,.balance-weight,.tripwire,.history-mark,.history-scene-trigger,.history-annotation-fact,.causal-fact,.causal-sparkline-mark';
+        const allowedOverflow = element => element.closest?.('.matrix-wrap,.line-wrap,.flow-grid,.history-stage,.causal-horizon-map,.rail-nav');
         const escapedElements = [...document.querySelectorAll('body *')].filter(element => {
           if (allowedOverflow(element) || element.closest?.('[hidden]')) return false;
           const style = getComputedStyle(element);
@@ -62,7 +122,24 @@ async page => {
           railTop: rail?.getBoundingClientRect().top ?? null,
           firstTop: firstSection?.getBoundingClientRect().top ?? null,
           railPosition: rail ? getComputedStyle(rail).position : null,
+          railDisplay: rail ? getComputedStyle(rail).display : null,
+          railTopCss: rail ? getComputedStyle(rail).top : null,
+          railWidth: rail?.getBoundingClientRect().width ?? 0,
+          layoutWidth: document.querySelector('.report-layout')?.getBoundingClientRect().width ?? 0,
+          chapterTrack: document.querySelector('.chapter-track') ? {
+            position: getComputedStyle(document.querySelector('.chapter-track')).position,
+            top: getComputedStyle(document.querySelector('.chapter-track')).top,
+            height: document.querySelector('.chapter-track').getBoundingClientRect().height,
+          } : null,
+          dashboardActiveSection: document.querySelector('.research-dashboard')?.dataset.activeSection || '',
+          activeDashboardStates: document.querySelectorAll('[data-dashboard-state]:not([hidden])').length,
+          railNavScroll: document.querySelector('.rail-nav') ? {
+            width: document.querySelector('.rail-nav').clientWidth,
+            scrollWidth: document.querySelector('.rail-nav').scrollWidth,
+          } : null,
           coverTabs: document.querySelectorAll('[role="tab"]').length,
+          schematicParts: document.querySelectorAll('#cover-stage .schematic-parts [data-part-id]').length,
+          coverAnimations: [...document.querySelectorAll('#cover-stage .atom-part')].map(part => getComputedStyle(part).animationName),
           chartCount: document.querySelectorAll('[data-chart-type]').length,
           disclosure: !!document.querySelector('.data-disclosure'),
           smallTargets: [...document.querySelectorAll(touchSelectors)].filter(element => {
@@ -84,20 +161,83 @@ async page => {
             withinViewport: wrap.getBoundingClientRect().left >= -1 && wrap.getBoundingClientRect().right <= innerWidth + 1,
           })),
           sourceAnchors: [...document.querySelectorAll('.chart-source a')].every(anchor => !!document.querySelector(anchor.getAttribute('href'))),
+          histories: [...document.querySelectorAll('[data-history-scrolly]')].map(root => {
+            const chart = root.querySelector('.history-chart');
+            return {
+              mode: root.dataset.historyMode,
+              scenes: root.querySelectorAll('[data-scrolly-step]').length,
+              activeScenes: root.querySelectorAll('[data-scrolly-step][aria-current="true"]').length,
+              focusStart: chart?.dataset.focusStart || '',
+              focusEnd: chart?.dataset.focusEnd || '',
+            };
+          }),
+          causalNodes: [...document.querySelectorAll('.causal-node[data-node-id]')].map(node => ({
+            id: node.dataset.nodeId,
+            direction: node.dataset.direction,
+            confidence: node.dataset.confidence,
+            sparkline: !!node.querySelector('.causal-sparkline'),
+          })),
         };
       });
       assert(geometry.lang.length > 0, `${label}: document language missing`);
-      assert(['editorial-longform', 'institutional-rail'].includes(geometry.preset), `${label}: unknown design preset`);
+      assert(['editorial-longform', 'editorial-scrollspy', 'editorial-dashboard', 'institutional-rail'].includes(geometry.preset), `${label}: unknown design preset`);
       assert(geometry.overflow <= 1, `${label}: document overflows horizontally by ${geometry.overflow}px`);
       assert(geometry.escapedElements.length === 0, `${label}: elements escape viewport: ${geometry.escapedElements.join(', ')}`);
       assert(geometry.coverTabs === 4, `${label}: expected four cover tabs, found ${geometry.coverTabs}`);
+      assert(initialCover.ready && !initialCover.busy, `${label}: cover remained busy after readiness wait`);
+      assert(initialCover.activeVisuals === 1, `${label}: cover must expose exactly one active visual`);
+      assert(initialCover.coverTransitions.every(duration => duration.split(',').every(value => Number.parseFloat(value) === 0)), `${label}: cover transition remains active under reduced motion`);
+      if (initialCover.assetMode) {
+        assert(initialCover.assetCount === 4, `${label}: Image-2/asset cover requires four assets, found ${initialCover.assetCount}`);
+        assert(initialCover.renderer === 'asset', `${label}: declared asset cover rendered as ${initialCover.renderer || 'unknown'}`);
+        assert(initialCover.image?.complete && initialCover.image?.decoded, `${label}: active cover image was not loaded and decoded`);
+        assert(initialCover.image?.naturalWidth > 0 && initialCover.image?.naturalHeight > 0, `${label}: active cover image has empty intrinsic dimensions`);
+        assert(['cover', 'contain', 'scale-down'].includes(initialCover.image?.objectFit), `${label}: cover image has invalid object-fit`);
+        assert(Boolean(initialCover.image?.objectPosition), `${label}: cover image has no focal/object position`);
+      } else {
+        assert(initialCover.renderer === 'schematic' || initialCover.renderer === 'fallback', `${label}: schematic cover renderer marker is missing`);
+        assert(initialCover.schematicParts >= 2, `${label}: engineering cover schematic did not render`);
+        assert(initialCover.coverAnimations.every(name => name === 'none'), `${label}: cover animation remains active under reduced motion`);
+      }
       assert(geometry.chartCount > 0, `${label}: no charts rendered`);
       assert(geometry.disclosure, `${label}: synthetic disclosure missing`);
       assert(geometry.smallTargets.length === 0, `${label}: touch targets below 40px: ${geometry.smallTargets.join(', ')}`);
       assert(geometry.duplicateChartFacts.length === 0, `${label}: duplicate chart fact controls: ${geometry.duplicateChartFacts.join(', ')}`);
       assert(geometry.sourceAnchors, `${label}: chart source anchor does not resolve`);
-      if (viewport.width < 1100) assert(geometry.railTop < geometry.firstTop, `${label}: directory/rail does not precede report body`);
+      if (viewport.width < 1100 && !['editorial-scrollspy', 'editorial-dashboard'].includes(geometry.preset)) assert(geometry.railTop < geometry.firstTop, `${label}: directory/rail does not precede report body`);
       if (geometry.preset === 'editorial-longform' && viewport.width >= 1100) assert(geometry.railPosition !== 'sticky', `${label}: editorial directory must not be sticky`);
+      if (geometry.preset === 'editorial-scrollspy') {
+        assert(geometry.railPosition === 'sticky', `${label}: editorial chapter track is not sticky`);
+        assert(geometry.railTopCss === '0px', `${label}: editorial chapter track does not pin to the viewport top`);
+        assert(geometry.railNavScroll && geometry.railNavScroll.scrollWidth >= geometry.railNavScroll.width, `${label}: chapter track scroll geometry is invalid`);
+      }
+      if (geometry.preset === 'editorial-dashboard') {
+        assert(geometry.chapterTrack?.position === 'sticky', `${label}: dashboard chapter track is not sticky`);
+        assert(geometry.chapterTrack?.top === '0px', `${label}: dashboard chapter track does not pin to the viewport top`);
+        assert(geometry.chapterTrack?.height <= (viewport.width >= 1100 ? 52 : 60), `${label}: dashboard chapter track is too tall`);
+        if (viewport.width >= 1100) {
+          assert(geometry.railPosition === 'sticky', `${label}: research dashboard is not sticky`);
+          assert(geometry.railDisplay !== 'none', `${label}: research dashboard is hidden on desktop`);
+          assert(geometry.layoutWidth > 0 && geometry.railWidth / geometry.layoutWidth >= 0.25 && geometry.railWidth / geometry.layoutWidth <= 0.32, `${label}: research dashboard width is outside the 25–32% target`);
+          assert(geometry.activeDashboardStates === 1, `${label}: exactly one research dashboard state must be visible`);
+          assert(Boolean(geometry.dashboardActiveSection), `${label}: research dashboard lacks an active section marker`);
+        } else {
+          assert(geometry.railDisplay === 'none', `${label}: research dashboard should collapse below desktop width`);
+        }
+      }
+      assert(geometry.histories.length > 0, `${label}: history-scrolly did not render`);
+      geometry.histories.forEach((history, index) => {
+        assert(history.mode === 'static', `${label}: history ${index} did not enter reduced-motion static mode`);
+        assert(history.scenes >= 2, `${label}: history ${index} lacks ordered scenes`);
+        assert(history.activeScenes === 1, `${label}: history ${index} must expose exactly one current scene`);
+        assert(history.focusStart && history.focusEnd, `${label}: history ${index} lacks a focus domain`);
+      });
+      assert(geometry.causalNodes.length >= 2, `${label}: causal horizon nodes did not render`);
+      geometry.causalNodes.forEach((node, index) => {
+        assert(['up', 'down', 'mixed'].includes(node.direction), `${label}: causal node ${index} lacks textual direction`);
+        assert(['low', 'medium', 'high'].includes(node.confidence), `${label}: causal node ${index} lacks textual confidence`);
+        assert(node.sparkline, `${label}: causal node ${index} lacks a sparkline`);
+      });
       geometry.matrixRegions.forEach((region, index) => {
         assert(region.contained, `${label}: matrix ${index} has invalid contained-overflow geometry`);
         assert(region.withinViewport, `${label}: matrix ${index} escapes the viewport`);
@@ -111,18 +251,60 @@ async page => {
 
       const firstTab = page.locator('[role="tab"]').first();
       const initialMode = await coverStage.getAttribute('data-cover-mode');
+      const initialPartCount = initialCover.schematicParts;
       await firstTab.focus();
       await page.keyboard.press('ArrowRight');
+      await waitForCoverReady(`${label}/keyboard`);
       const activeTab = page.locator('[role="tab"][aria-selected="true"]');
+      const keyboardCover = await readCoverState();
       assert(await activeTab.getAttribute('tabindex') === '0', `${label}: cover roving tabindex failed`);
       assert(await coverStage.getAttribute('data-cover-mode') !== initialMode, `${label}: cover stage did not change with keyboard navigation`);
+      if (initialCover.assetMode) {
+        assert(keyboardCover.renderer === 'asset' && keyboardCover.image?.decoded, `${label}: keyboard-selected cover asset did not decode`);
+        assert(keyboardCover.image?.sourceFingerprint !== initialCover.image?.sourceFingerprint, `${label}: adjacent cover tabs reused the same asset`);
+      } else {
+        assert(await coverStage.locator('.schematic-parts [data-part-id]').count() === initialPartCount, `${label}: cover mode changed the physical schematic parts`);
+      }
+
+      if (viewport.name === 'desktop') {
+        const fingerprints = [];
+        for (const mode of coverModes) {
+          await page.locator(`[data-cover-view="${mode}"]`).click();
+          await waitForCoverReady(`${label}/${mode}/reduced`);
+          const state = await readCoverState();
+          assert(state.mode === mode && state.activeVisuals === 1, `${label}: ${mode} did not become the sole active cover state`);
+          if (state.assetMode) {
+            assert(state.renderer === 'asset' && state.image?.decoded && state.image?.naturalWidth > 0, `${label}: ${mode} asset did not load`);
+            fingerprints.push(state.image?.sourceFingerprint);
+          } else {
+            assert(state.schematicParts === initialPartCount, `${label}: ${mode} changed the physical schematic parts`);
+          }
+          await coverStage.screenshot({ path: `${artifactDir}/${target.name}-desktop-cover-${mode}-reduced.png` });
+          screenshots += 1;
+        }
+        if (initialCover.assetMode) assert(new Set(fingerprints).size === 4, `${label}: the four cover states do not use four unique loaded assets`);
+      }
 
       const nav = page.locator('.rail-nav a').first();
       const href = await nav.getAttribute('href');
       await nav.click();
       assert((await page.evaluate(() => location.hash)) === href, `${label}: directory link did not update the anchor`);
+      if (['editorial-scrollspy', 'editorial-dashboard'].includes(geometry.preset)) {
+        await page.waitForTimeout(120);
+        assert(await nav.evaluate(element => element.classList.contains('is-active')), `${label}: chapter scrollspy did not activate the selected section`);
+      }
+      if (geometry.preset === 'editorial-dashboard' && viewport.width >= 1100) {
+        const firstEvidenceTop = await page.locator('.report-section').first().locator('.chart-plate').first().evaluate(element => element.getBoundingClientRect().top);
+        assert(firstEvidenceTop < Math.min(viewport.height * 0.78, 720), `${label}: first evidence chart begins too far below the chapter opener (${Math.round(firstEvidenceTop)}px)`);
+        const secondNav = page.locator('.rail-nav a').nth(1);
+        const secondSection = await secondNav.getAttribute('data-section-link');
+        await secondNav.click();
+        await page.waitForTimeout(180);
+        const syncedSection = await page.locator('.research-dashboard').getAttribute('data-active-section');
+        assert(syncedSection === secondSection, `${label}: research dashboard did not sync to the selected chapter`);
+      }
 
-      const trigger = page.locator('.kpi[data-fact-id],.fact-chip[data-fact-id],[data-chart-type] [data-fact-id]').first();
+      const trigger = page.locator('.kpi[data-fact-id]:visible,.fact-chip[data-fact-id]:visible,[data-chart-type] [data-fact-id]:visible').first();
       await trigger.scrollIntoViewIfNeeded();
       await trigger.focus();
       const triggerFact = await trigger.getAttribute('data-fact-id');
@@ -164,6 +346,35 @@ async page => {
       await page.locator('#drawer-scrim').click({ position: { x: 4, y: 4 } });
       assert(await drawer.isHidden(), `${label}: scrim did not close drawer`);
     }
+  }
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  for (const target of targets) {
+    const label = `${target.name}/desktop/motion`;
+    await page.goto(`${baseUrl}/${target.path}`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('#cover-stage [data-cover-visual]');
+    await waitForCoverReady(label);
+    const fingerprints = [];
+    let assetMode = false;
+    for (const mode of coverModes) {
+      await page.locator(`[data-cover-view="${mode}"]`).click();
+      await waitForCoverReady(`${label}/${mode}`);
+      const state = await readCoverState();
+      assetMode = state.assetMode;
+      assert(state.mode === mode && state.activeVisuals === 1, `${label}: ${mode} did not settle before capture`);
+      if (state.assetMode) {
+        assert(state.renderer === 'asset' && state.image?.decoded && state.image?.naturalWidth > 0, `${label}: ${mode} asset did not decode before capture`);
+        fingerprints.push(state.image?.sourceFingerprint);
+      } else {
+        assert(state.renderer === 'schematic' || state.renderer === 'fallback', `${label}: ${mode} lacks a renderer marker`);
+        assert(state.schematicParts >= 2, `${label}: ${mode} schematic parts are missing`);
+      }
+      await page.waitForTimeout(state.assetMode ? 80 : (mode === 'recursive' ? 650 : mode === 'exploded' ? 900 : 520));
+      await page.locator('#cover-stage').screenshot({ path: `${artifactDir}/${target.name}-desktop-cover-${mode}-motion.png` });
+      screenshots += 1;
+    }
+    if (assetMode) assert(new Set(fingerprints).size === 4, `${label}: the four motion captures do not use four unique loaded assets`);
   }
   assert(consoleErrors.length === 0, `browser errors: ${consoleErrors.join(' | ')}`);
   if (failures.length) throw new Error(`Visual Research Report browser QA failed:\n${failures.join('\n')}`);

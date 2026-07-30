@@ -38,6 +38,12 @@
     analyst_annotation: "Analyst annotation",
     decision_takeaways: "Decision takeaways",
     report_dashboard: "Report dashboard",
+    chapter_progress: "Chapter progress",
+    research_dashboard: "Research dashboard",
+    current_reading: "Current reading",
+    chapter_indicators: "Chapter indicators",
+    decision_signals: "Decision signals",
+    evidence_trend: "Evidence trend",
     key_numbers: "Key numbers",
     contents: "Contents",
     research_contract: "Research contract",
@@ -71,6 +77,16 @@
     long_forces: "Upside forces",
     short_forces: "Downside forces",
     tripwires: "Tripwires",
+    history_chart: "Historical series",
+    history_scene: "Scene {index} of {count}",
+    causal_horizon_map: "Causal horizon map",
+    causal_links: "Causal links",
+    causal_scroll_hint: "Scroll inside this region to compare horizons",
+    signal: "Signal",
+    lag: "Lag",
+    threshold: "Threshold",
+    direction: "Direction",
+    confidence: "Confidence",
   };
 
   const ZH = {
@@ -94,6 +110,12 @@
     analyst_annotation: "分析师判断",
     decision_takeaways: "决策要点",
     report_dashboard: "研究仪表盘",
+    chapter_progress: "章节进度",
+    research_dashboard: "研究仪表盘",
+    current_reading: "当前读数",
+    chapter_indicators: "章节指标",
+    decision_signals: "决策信号",
+    evidence_trend: "证据趋势",
     key_numbers: "关键数字",
     contents: "目录",
     research_contract: "研究口径",
@@ -127,6 +149,16 @@
     long_forces: "多头力量",
     short_forces: "空头力量",
     tripwires: "失效触发器",
+    history_chart: "历史序列",
+    history_scene: "场景 {index} / {count}",
+    causal_horizon_map: "因果地平线图",
+    causal_links: "因果连接",
+    causal_scroll_hint: "在此区域内横向滚动以比较不同期限",
+    signal: "信号",
+    lag: "滞后",
+    threshold: "阈值",
+    direction: "方向",
+    confidence: "置信度",
   };
 
   const language = String(report.meta.language || "en-US");
@@ -136,8 +168,11 @@
     labels[key] ?? EN[key] ?? key,
   );
 
+  const presentationPreset = report.presentation?.preset || "institutional-rail";
+  const isEditorialDashboard = presentationPreset === "editorial-dashboard";
+
   document.documentElement.lang = language;
-  document.documentElement.dataset.designPreset = report.presentation?.preset || "institutional-rail";
+  document.documentElement.dataset.designPreset = presentationPreset;
   document.title = report.meta.title || "Visual Research Report";
   skipLink.textContent = t("skip_to_report");
   noScript.textContent = t("javascript_required");
@@ -173,28 +208,147 @@
     return `<button class="${className}" type="button" data-fact-id="${escapeHtml(factId)}" data-kind="${escapeHtml(fact.kind)}">${escapeHtml(label ?? fact.display)}</button>`;
   };
 
-  const renderCoverVisual = (view) => {
+  const positiveImageDimension = (...values) => {
+    const value = values.map(Number).find((candidate) => Number.isFinite(candidate) && candidate > 0);
+    return value ? String(Math.round(value)) : "";
+  };
+
+  const coverPositionToken = (value, fallback) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const percent = value >= 0 && value <= 1 ? value * 100 : value;
+      return `${Math.max(0, Math.min(100, percent))}%`;
+    }
+    const text = String(value ?? "").trim().toLowerCase();
+    if (/^(?:left|center|right|top|bottom)$/.test(text)) return text;
+    const numeric = text.match(/^(-?\d+(?:\.\d+)?)%$/);
+    if (numeric) return `${Math.max(0, Math.min(100, Number(numeric[1])))}%`;
+    return fallback;
+  };
+
+  const coverObjectPosition = (view) => {
+    const explicit = String(view.object_position || "").trim().toLowerCase();
+    if (/^(?:(?:left|center|right|top|bottom)|(?:-?\d+(?:\.\d+)?%))(?:\s+(?:(?:left|center|right|top|bottom)|(?:-?\d+(?:\.\d+)?%)))?$/.test(explicit)) return explicit;
+    const focal = view.focal_point;
+    if (Array.isArray(focal) && focal.length >= 2) return `${coverPositionToken(focal[0], "50%")} ${coverPositionToken(focal[1], "50%")}`;
+    if (focal && typeof focal === "object") return `${coverPositionToken(focal.x, "50%")} ${coverPositionToken(focal.y, "50%")}`;
+    if (typeof focal === "string") {
+      const tokens = focal.trim().split(/\s+/);
+      if (tokens.length >= 2) return `${coverPositionToken(tokens[0], "50%")} ${coverPositionToken(tokens[1], "50%")}`;
+    }
+    return "50% 50%";
+  };
+
+  const coverImagePresentation = (view) => {
+    const dimensions = view.dimensions && typeof view.dimensions === "object" ? view.dimensions : {};
+    const width = positiveImageDimension(view.width, view.asset_width, view.intrinsic_width, dimensions.width);
+    const height = positiveImageDimension(view.height, view.asset_height, view.intrinsic_height, dimensions.height);
+    const requestedFit = String(view.object_fit || view.fit || "").trim().toLowerCase();
+    const fit = ["cover", "contain", "scale-down"].includes(requestedFit) ? requestedFit : (view.id === "blueprint" ? "contain" : "cover");
+    return { width, height, fit, position: coverObjectPosition(view) };
+  };
+
+  const coverRendererForView = (view, forceFallback = false) => {
+    if (view?.asset && !forceFallback) return "asset";
+    if (report.theme_atom?.schematic?.parts?.length) return "schematic";
+    return "fallback";
+  };
+
+  const renderSchematic = (schematic) => {
+    const dimensions = Array.isArray(schematic?.view_box) ? schematic.view_box.map(Number) : [];
+    const width = Number.isFinite(dimensions[0]) && dimensions[0] > 0 ? dimensions[0] : 1200;
+    const height = Number.isFinite(dimensions[1]) && dimensions[1] > 0 ? dimensions[1] : 800;
+    const parts = Array.isArray(schematic?.parts) ? schematic.parts : [];
+    const partCenters = new Map();
+    const px = (value) => Number(value) / 100 * width;
+    const py = (value) => Number(value) / 100 * height;
+    const radius = (value) => Number(value) / 200 * Math.min(width, height);
+
+    parts.forEach((part) => {
+      if (part.shape === "circle") partCenters.set(part.id, [px(part.x), py(part.y)]);
+      else partCenters.set(part.id, [px(Number(part.x) + Number(part.width) / 2), py(Number(part.y) + Number(part.height) / 2)]);
+    });
+
+    const connections = (schematic.connections || []).map((connection, index) => {
+      const source = partCenters.get(connection.from);
+      const target = partCenters.get(connection.to);
+      if (!source || !target) return "";
+      return `<line class="atom-connection schematic-connection" data-connection-index="${index}" data-from="${escapeHtml(connection.from)}" data-to="${escapeHtml(connection.to)}" x1="${source[0].toFixed(3)}" y1="${source[1].toFixed(3)}" x2="${target[0].toFixed(3)}" y2="${target[1].toFixed(3)}"></line>`;
+    }).join("");
+    const echoConnections = (schematic.connections || []).map((connection) => {
+      const source = partCenters.get(connection.from);
+      const target = partCenters.get(connection.to);
+      if (!source || !target) return "";
+      return `<line class="schematic-echo-connection" x1="${source[0].toFixed(3)}" y1="${source[1].toFixed(3)}" x2="${target[0].toFixed(3)}" y2="${target[1].toFixed(3)}"></line>`;
+    }).join("");
+
+    const shapes = parts.map((part, index) => {
+      const role = part.role || "detail";
+      const shared = `class="atom-part schematic-part schematic-part-${escapeHtml(part.shape)} schematic-role-${escapeHtml(role)}" data-part-index="${index}" data-part-id="${escapeHtml(part.id)}" style="--part-index:${index};--part-count:${parts.length}"`;
+      const shape = part.shape === "circle"
+        ? `<circle cx="${px(part.x).toFixed(3)}" cy="${py(part.y).toFixed(3)}" r="${radius(part.width).toFixed(3)}"></circle>`
+        : `<rect x="${px(part.x).toFixed(3)}" y="${py(part.y).toFixed(3)}" width="${px(part.width).toFixed(3)}" height="${py(part.height).toFixed(3)}" rx="${Math.min(width, height) * 0.008}"></rect>`;
+      const labelFits = part.shape === "circle"
+        ? Number(part.width) >= 14
+        : Number(part.width) >= 18 && Number(part.height) >= 10;
+      const center = partCenters.get(part.id);
+      const labelSize = Math.max(Math.min(width, height) * 0.018, 1.8);
+      const label = labelFits && center
+        ? `<text class="schematic-part-label" x="${center[0].toFixed(3)}" y="${center[1].toFixed(3)}" style="font-size:${labelSize.toFixed(3)}px" text-anchor="middle" dominant-baseline="middle">${escapeHtml(part.label)}</text>`
+        : "";
+      return `<g ${shared}>${shape}${label}</g>`;
+    }).join("");
+    const echoShapes = parts.map((part) => part.shape === "circle"
+      ? `<circle class="schematic-echo-part" cx="${px(part.x).toFixed(3)}" cy="${py(part.y).toFixed(3)}" r="${radius(part.width).toFixed(3)}"></circle>`
+      : `<rect class="schematic-echo-part" x="${px(part.x).toFixed(3)}" y="${py(part.y).toFixed(3)}" width="${px(part.width).toFixed(3)}" height="${py(part.height).toFixed(3)}" rx="${Math.min(width, height) * 0.008}"></rect>`).join("");
+    const echo = `<g class="schematic-echo-geometry">${echoConnections}${echoShapes}</g>`;
+
+    return `<svg class="atom-engineering-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"><g class="schematic-echo schematic-echo-far" aria-hidden="true">${echo}</g><g class="schematic-echo schematic-echo-near" aria-hidden="true">${echo}</g><g class="schematic-connections">${connections}</g><g class="schematic-parts">${shapes}</g></svg>`;
+  };
+
+  const renderCoverVisual = (view, { active = false, forceFallback = false } = {}) => {
     const atom = report.theme_atom || {};
-    if (view.asset) return `<img class="cover-image" src="${escapeHtml(view.asset)}" alt="${escapeHtml(view.alt)}">`;
-    return `<div class="atom-schematic" role="img" aria-label="${escapeHtml(view.alt)}">
-      <span class="schematic-tag">${escapeHtml(t("schematic_fallback"))}</span>
-      <span class="atom-layer layer-b"></span><span class="atom-layer layer-a"></span><span class="atom-core"></span>
-      <strong class="atom-name">${escapeHtml(atom.name)}</strong>
-      <span class="atom-caption"><span>${escapeHtml(view.label)}</span><span>${escapeHtml(atom.material || t("physical_system"))}</span></span>
-    </div>`;
+    const renderer = coverRendererForView(view, forceFallback);
+    const state = active ? " is-active" : "";
+    const hidden = active ? "false" : "true";
+    if (renderer === "asset") {
+      const presentation = coverImagePresentation(view);
+      const dimensions = `${presentation.width ? ` width="${presentation.width}"` : ""}${presentation.height ? ` height="${presentation.height}"` : ""}`;
+      return `<div class="cover-visual cover-visual--asset${state}" data-cover-visual data-cover-visual-id="${escapeHtml(view.id)}" data-cover-renderer="asset" aria-hidden="${hidden}"><img class="cover-image" src="${escapeHtml(view.asset)}" alt="${escapeHtml(view.alt)}" decoding="async" loading="eager" fetchpriority="high"${dimensions} style="--cover-object-fit:${escapeHtml(presentation.fit)};--cover-object-position:${escapeHtml(presentation.position)}"></div>`;
+    }
+    if (atom.schematic?.parts?.length) {
+      return `<div class="cover-visual cover-visual--schematic${state}" data-cover-visual data-cover-visual-id="${escapeHtml(view.id)}" data-cover-renderer="schematic" aria-hidden="${hidden}"><div class="atom-schematic atom-schematic-engineered" role="img" aria-label="${escapeHtml(view.alt)}">
+          <span class="schematic-tag">${escapeHtml(view.label)}</span>${renderSchematic(atom.schematic)}
+          <strong class="atom-name">${escapeHtml(atom.name)}</strong>
+          <span class="atom-caption"><span>${escapeHtml(view.label)}</span><span>${escapeHtml(atom.material || t("physical_system"))}</span></span>
+        </div></div>`;
+    }
+    return `<div class="cover-visual cover-visual--fallback${state}" data-cover-visual data-cover-visual-id="${escapeHtml(view.id)}" data-cover-renderer="fallback" aria-hidden="${hidden}"><div class="atom-schematic" role="img" aria-label="${escapeHtml(view.alt)}">
+        <span class="schematic-tag">${escapeHtml(t("schematic_fallback"))}</span>
+        <span class="atom-layer layer-b"></span><span class="atom-layer layer-a"></span><span class="atom-core"></span>
+        <strong class="atom-name">${escapeHtml(atom.name)}</strong>
+        <span class="atom-caption"><span>${escapeHtml(view.label)}</span><span>${escapeHtml(atom.material || t("physical_system"))}</span></span>
+      </div></div>`;
   };
 
   const renderCover = () => {
     const meta = report.meta;
     const views = report.theme_atom?.views || [];
     const active = views[0] || { id: "recursive", label: "Recursive", alt: report.theme_atom?.name || "Theme atom" };
+    const renderer = coverRendererForView(active);
+    const coverReady = renderer === "asset" ? "false" : "true";
+    const productionMode = report.theme_atom?.production?.mode || (renderer === "asset" ? "assets" : "schematic");
+    const canvasWidth = Number(report.theme_atom?.production?.canvas?.width);
+    const canvasHeight = Number(report.theme_atom?.production?.canvas?.height);
+    const stageStyle = renderer === "asset" && Number.isFinite(canvasWidth) && canvasWidth > 0 && Number.isFinite(canvasHeight) && canvasHeight > 0
+      ? ` style="--cover-asset-aspect:${canvasWidth} / ${canvasHeight}"`
+      : "";
     return `<header class="masthead"><span class="masthead-mark">${escapeHtml(meta.publisher)}</span><span class="masthead-meta"><span>${escapeHtml(t("interactive_research"))}</span> · ${escapeHtml(meta.as_of)}</span></header>
       <section class="cover" aria-labelledby="report-title"><div class="cover-grid"><div class="cover-copy">
         <p class="kicker">${escapeHtml(meta.kicker)}</p><h1 class="cover-title" id="report-title">${escapeHtml(meta.title)}</h1>
         <p class="cover-subtitle">${escapeHtml(meta.subtitle)}</p><p class="cover-summary">${escapeHtml(meta.summary)}</p>
         <div class="cover-meta"><span>${escapeHtml(t("as_of", { date: meta.as_of }))}</span>${meta.reading_time ? `<span>${escapeHtml(meta.reading_time)}</span>` : ""}<span>${escapeHtml(t("theme_atom", { name: report.theme_atom?.name }))}</span></div>
       </div><div class="cover-media">
-        <div class="cover-stage" id="cover-stage" role="tabpanel" aria-live="polite" aria-labelledby="cover-tab-${escapeHtml(active.id)}" data-cover-mode="${escapeHtml(active.id)}">${renderCoverVisual(active)}</div>
+        <div class="cover-stage${renderer === "asset" ? " is-cover-loading" : ""}" id="cover-stage" role="tabpanel" aria-live="polite" aria-labelledby="cover-tab-${escapeHtml(active.id)}" aria-busy="${renderer === "asset" ? "true" : "false"}" data-cover-mode="${escapeHtml(active.id)}" data-cover-renderer="${renderer}" data-cover-ready="${coverReady}" data-cover-production="${escapeHtml(productionMode)}"${stageStyle}>${renderCoverVisual(active, { active: true })}</div>
         <div class="cover-switcher" role="tablist" aria-label="${escapeHtml(t("theme_atom", { name: report.theme_atom?.name }))}">
           ${views.map((view, index) => `<button id="cover-tab-${escapeHtml(view.id)}" type="button" role="tab" aria-controls="cover-stage" data-cover-view="${escapeHtml(view.id)}" aria-selected="${index === 0 ? "true" : "false"}" tabindex="${index === 0 ? "0" : "-1"}">${escapeHtml(view.label)}</button>`).join("")}
         </div>
@@ -350,6 +504,134 @@
     return `<div class="line-wrap" data-scroll-latest="true" role="region" aria-label="${escapeHtml(t("line_chart"))}" tabindex="0"><svg class="line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t("line_chart"))}">${horizontal}${seriesSvg}${labelSvg}${xAxis}</svg></div><div class="line-legend">${legend}</div>`;
   };
 
+  let historySequence = 0;
+  const renderHistoryScrolly = (data) => {
+    const instanceId = `history-${historySequence += 1}`;
+    const width = 960;
+    const height = 390;
+    const pad = { left: 62, right: 34, top: 34, bottom: 52 };
+    const pointLabel = (point) => String(point?.label ?? point?.x ?? "");
+    const pointValue = (point) => Number(point?.value ?? point?.y);
+    const series = data.series || [];
+    const allPoints = series.flatMap((item) => item.points || []);
+    const values = allPoints.map(pointValue).filter(Number.isFinite);
+    const scale = data.scale || {};
+    const domain = Array.isArray(scale.domain) ? scale.domain.map(Number) : [];
+    const minY = Number.isFinite(domain[0]) ? domain[0] : Math.min(...values, 0);
+    const maxY = Number.isFinite(domain[1]) ? domain[1] : Math.max(...values, 1);
+    const ySpan = maxY - minY || 1;
+    const firstLabels = (series[0]?.points || []).map(pointLabel);
+    const xLabels = [...firstLabels, ...allPoints.map(pointLabel).filter((label) => !firstLabels.includes(label))];
+    const xAtIndex = (index) => pad.left + (index / Math.max(1, xLabels.length - 1)) * (width - pad.left - pad.right);
+    const xAt = (label) => xAtIndex(Math.max(0, xLabels.indexOf(String(label))));
+    const yAt = (value) => pad.top + (1 - (Number(value) - minY) / ySpan) * (height - pad.top - pad.bottom);
+    const ticks = Array.isArray(scale.ticks) && scale.ticks.length > 1
+      ? scale.ticks.map(Number)
+      : Array.from({ length: 5 }, (_, index) => minY + index / 4 * ySpan);
+    const horizontal = [...ticks].reverse().map((value) => {
+      const y = yAt(value);
+      const label = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+      return `<line class="history-grid-line" x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"></line><text class="history-axis-label" x="${pad.left - 10}" y="${y + 4}" text-anchor="end">${escapeHtml(label)}</text>`;
+    }).join("");
+
+    const scenes = (data.scenes || []).map((scene, index) => {
+      const rawStart = xLabels.indexOf(String(scene.start_label));
+      const rawEnd = xLabels.indexOf(String(scene.end_label));
+      const startIndex = Math.max(0, rawStart);
+      const endIndex = Math.max(startIndex, rawEnd < 0 ? xLabels.length - 1 : rawEnd);
+      return { ...scene, index, startIndex, endIndex };
+    });
+    const initialScene = scenes[0] || { id: "full", title: t("history_chart"), start_label: xLabels[0] || "", end_label: xLabels[xLabels.length - 1] || "", startIndex: 0, endIndex: Math.max(0, xLabels.length - 1) };
+    const initialX = xAtIndex(initialScene.startIndex);
+    const initialWidth = Math.max(2, xAtIndex(initialScene.endIndex) - initialX);
+    const clipId = `${instanceId}-focus-clip`;
+
+    const paths = series.map((item, seriesIndex) => {
+      const color = item.color || SERIES_COLORS[seriesIndex % SERIES_COLORS.length];
+      const points = item.points || [];
+      const polyline = points.map((point) => `${xAt(pointLabel(point))},${yAt(pointValue(point))}`).join(" ");
+      return `<polyline class="history-path history-line-path is-context" data-series-index="${seriesIndex}" style="--series-color:${escapeHtml(color)}" points="${polyline}"></polyline><polyline class="history-path history-line-path is-focus" data-series-index="${seriesIndex}" style="--series-color:${escapeHtml(color)}" points="${polyline}" clip-path="url(#${clipId})"></polyline>`;
+    }).join("");
+    const marks = series.map((item, seriesIndex) => {
+      const color = item.color || SERIES_COLORS[seriesIndex % SERIES_COLORS.length];
+      return (item.points || []).map((point) => {
+        const fact = facts.get(point.fact_id);
+        if (!fact) return "";
+        const pointIndex = Math.max(0, xLabels.indexOf(pointLabel(point)));
+        const aria = `${item.name}, ${pointLabel(point)}, ${fact.display}`;
+        return `<g class="history-mark" role="button" tabindex="0" data-fact-id="${escapeHtml(point.fact_id)}" data-point-index="${pointIndex}" data-series-index="${seriesIndex}" aria-label="${escapeHtml(aria)}"><circle class="history-mark-hit" cx="${xAtIndex(pointIndex)}" cy="${yAt(pointValue(point))}" r="24"></circle><circle class="history-point history-mark-dot" aria-hidden="true" style="--series-color:${escapeHtml(color)}" cx="${xAtIndex(pointIndex)}" cy="${yAt(pointValue(point))}" r="5"></circle></g>`;
+      }).join("");
+    }).join("");
+    const labelStride = Math.max(1, Math.ceil(xLabels.length / 9));
+    const boundaryLabels = new Set(scenes.flatMap((scene) => [scene.start_label, scene.end_label]).map(String));
+    const xAxis = xLabels.map((label, index) => (index === 0 || index === xLabels.length - 1 || index % labelStride === 0 || boundaryLabels.has(label))
+      ? `<text class="history-axis-label history-x-label" data-label-index="${index}" x="${xAtIndex(index)}" y="${height - 18}" text-anchor="middle">${escapeHtml(label)}</text>`
+      : "").join("");
+    const legend = series.map((item, index) => `<span><i class="legend-mark" style="background:${escapeHtml(item.color || SERIES_COLORS[index % SERIES_COLORS.length])}"></i>${escapeHtml(item.name)}</span>`).join("");
+    const plottedFactIds = new Set(allPoints.map((point) => point.fact_id).filter(Boolean));
+    const renderedAnnotationFactIds = new Set();
+    const sceneSteps = scenes.map((scene, index) => {
+      const annotations = (scene.annotation_fact_ids || []).map((id) => {
+        if (plottedFactIds.has(id) || renderedAnnotationFactIds.has(id)) return "";
+        renderedAnnotationFactIds.add(id);
+        return factControl(id, undefined, "history-annotation-fact");
+      }).join("");
+      return `<article class="history-scene${index === 0 ? " is-active" : ""}" data-scrolly-step data-scene-id="${escapeHtml(scene.id)}" data-scene-index="${index}" data-start-index="${scene.startIndex}" data-end-index="${scene.endIndex}" data-start-label="${escapeHtml(scene.start_label)}" data-end-label="${escapeHtml(scene.end_label)}" data-scene-title="${escapeHtml(scene.title)}" data-annotation-fact-ids="${escapeHtml((scene.annotation_fact_ids || []).join(" "))}" aria-current="${index === 0 ? "true" : "false"}"><button class="history-scene-trigger" type="button" data-history-scene-trigger aria-controls="${instanceId}-chart"><span class="history-scene-number">${escapeHtml(t("history_scene", { index: index + 1, count: scenes.length }))}</span><strong>${escapeHtml(scene.title)}</strong>${scene.body ? `<span>${escapeHtml(scene.body)}</span>` : ""}<span class="history-scene-range">${escapeHtml(scene.start_label)} — ${escapeHtml(scene.end_label)}</span></button>${annotations ? `<div class="history-scene-facts" aria-label="${escapeHtml(t("evidence"))}">${annotations}</div>` : ""}</article>`;
+    }).join("");
+
+    return `<div class="history-scrolly" data-history-scrolly data-history-id="${instanceId}" data-history-mode="interactive" data-active-scene="${escapeHtml(initialScene.id)}" data-active-scene-index="0" data-reduced-motion="false" data-plot-left="${pad.left}" data-plot-right="${width - pad.right}" data-x-count="${xLabels.length}"><div class="history-stage" data-scene-id="${escapeHtml(initialScene.id)}"><div class="history-stage-status" aria-live="polite"><span class="history-stage-range">${escapeHtml(initialScene.start_label)} — ${escapeHtml(initialScene.end_label)}</span><strong class="history-stage-title">${escapeHtml(initialScene.title)}</strong></div><svg class="history-chart" id="${instanceId}-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t("history_chart"))}" data-scene-start-index="${initialScene.startIndex}" data-scene-end-index="${initialScene.endIndex}" data-focus-start="${escapeHtml(initialScene.start_label)}" data-focus-end="${escapeHtml(initialScene.end_label)}"><defs><clipPath id="${clipId}"><rect class="history-focus-clip" x="${initialX}" y="${pad.top}" width="${initialWidth}" height="${height - pad.top - pad.bottom}"></rect></clipPath></defs>${horizontal}<rect class="history-focus-band history-focus-window" x="${initialX}" y="${pad.top}" width="${initialWidth}" height="${height - pad.top - pad.bottom}" aria-hidden="true"></rect>${paths}${marks}${xAxis}</svg><div class="line-legend history-legend">${legend}</div></div><div class="history-steps">${sceneSteps}</div></div>`;
+  };
+
+  let causalSequence = 0;
+  const renderCausalSparkline = (node, instanceId, reservedFactIds) => {
+    const sparkline = node.sparkline || {};
+    const points = sparkline.points || [];
+    const width = 240;
+    const height = 86;
+    const pad = { left: 8, right: 8, top: 10, bottom: 12 };
+    const values = points.map((point) => Number(point.value)).filter(Number.isFinite);
+    const domain = Array.isArray(sparkline.scale?.domain) ? sparkline.scale.domain.map(Number) : [];
+    const minY = Number.isFinite(domain[0]) ? domain[0] : Math.min(...values, 0);
+    const maxY = Number.isFinite(domain[1]) ? domain[1] : Math.max(...values, 1);
+    const span = maxY - minY || 1;
+    const xAt = (index) => pad.left + index / Math.max(1, points.length - 1) * (width - pad.left - pad.right);
+    const yAt = (value) => pad.top + (1 - (Number(value) - minY) / span) * (height - pad.top - pad.bottom);
+    const polyline = points.map((point, index) => `${xAt(index)},${yAt(point.value)}`).join(" ");
+    const marks = points.map((point, index) => {
+      const fact = facts.get(point.fact_id);
+      if (!fact) return "";
+      const aria = `${node.label}, ${point.label}, ${fact.display}`;
+      if (reservedFactIds.has(point.fact_id)) return `<g class="causal-sparkline-summary-mark" aria-hidden="true" data-point-index="${index}"><circle class="causal-sparkline-dot" cx="${xAt(index)}" cy="${yAt(point.value)}" r="4"></circle></g>`;
+      return `<g class="causal-sparkline-mark" role="button" tabindex="0" data-fact-id="${escapeHtml(point.fact_id)}" data-point-index="${index}" aria-label="${escapeHtml(aria)}"><circle class="causal-sparkline-hit" cx="${xAt(index)}" cy="${yAt(point.value)}" r="16"></circle><circle class="causal-sparkline-dot" aria-hidden="true" cx="${xAt(index)}" cy="${yAt(point.value)}" r="4"></circle></g>`;
+    }).join("");
+    return `<svg class="causal-sparkline" id="${instanceId}-${escapeHtml(node.id)}-sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(`${node.label}: ${t("history_chart")}`)}"><polyline class="causal-spark-path causal-sparkline-path" points="${polyline}"></polyline>${marks}</svg>`;
+  };
+
+  const renderCausalHorizonMap = (data) => {
+    const instanceId = `causal-${causalSequence += 1}`;
+    const nodes = data.nodes || [];
+    const nodeLookup = new Map(nodes.map((node) => [node.id, node]));
+    const reservedFactIds = new Set(nodes.flatMap((node) => [node.signal_fact_id, node.lag_fact_id, node.threshold_fact_id]).filter(Boolean));
+    const directionGlyph = { up: "↑", down: "↓", mixed: "↕" };
+    const columns = (data.horizons || []).map((horizon, horizonIndex) => {
+      const horizonNodes = nodes.filter((node) => node.horizon_id === horizon.id);
+      const cards = horizonNodes.map((node, nodeIndex) => {
+        const signal = factControl(node.signal_fact_id, `${t("signal")}: ${facts.get(node.signal_fact_id)?.display || "—"}`, "causal-fact causal-signal-fact");
+        const lag = node.lag_fact_id ? factControl(node.lag_fact_id, `${t("lag")}: ${facts.get(node.lag_fact_id)?.display || "—"}`, "causal-fact causal-lag-fact") : "";
+        const threshold = node.threshold_fact_id ? factControl(node.threshold_fact_id, `${t("threshold")}: ${facts.get(node.threshold_fact_id)?.display || "—"}`, "causal-fact causal-threshold-fact") : "";
+        const confidenceValue = { low: 0.32, medium: 0.64, high: 0.94 }[node.confidence] || 0.5;
+        return `<article class="causal-node" id="${instanceId}-node-${escapeHtml(node.id)}" data-node-id="${escapeHtml(node.id)}" data-direction="${escapeHtml(node.direction)}" data-confidence="${escapeHtml(node.confidence)}" style="--node-index:${nodeIndex};--confidence:${confidenceValue}"><header class="causal-node-head"><span class="causal-direction" aria-label="${escapeHtml(`${t("direction")}: ${node.direction}`)}">${directionGlyph[node.direction] || "—"}</span><h4 class="causal-node-label">${escapeHtml(node.label)}</h4><span class="causal-confidence">${escapeHtml(`${t("confidence")}: ${node.confidence}`)}</span></header>${renderCausalSparkline(node, instanceId, reservedFactIds)}<div class="causal-node-facts">${signal}${lag}${threshold}</div></article>`;
+      }).join("");
+      return `<section class="causal-column" data-horizon-id="${escapeHtml(horizon.id)}" style="--horizon-index:${horizonIndex}"><header class="causal-column-head causal-column-title"><span>${escapeHtml(t("horizon"))}</span><h4>${escapeHtml(horizon.label)}</h4></header><div class="causal-node-list">${cards}</div></section>`;
+    }).join("");
+    const connectors = (data.edges || []).map((edge, index) => {
+      const source = nodeLookup.get(edge.from)?.label || edge.from;
+      const target = nodeLookup.get(edge.to)?.label || edge.to;
+      return `<div class="causal-connector" role="listitem" data-edge-index="${index}" data-from="${escapeHtml(edge.from)}" data-to="${escapeHtml(edge.to)}"><span class="causal-connector-route">${escapeHtml(source)} <span aria-hidden="true">→</span> ${escapeHtml(target)}</span>${edge.label ? `<span class="causal-connector-label">${escapeHtml(edge.label)}</span>` : ""}</div>`;
+    }).join("");
+    return `<div class="causal-horizon-map" role="group" aria-label="${escapeHtml(t("causal_horizon_map"))}" style="--horizon-count:${Math.max(1, data.horizons?.length || 0)}"><p class="causal-overflow-hint">${escapeHtml(t("causal_scroll_hint"))}</p><div class="causal-columns" data-contained-overflow="true" role="region" aria-label="${escapeHtml(t("causal_scroll_hint"))}" tabindex="0">${columns}</div><div class="causal-connectors" role="list" aria-label="${escapeHtml(t("causal_links"))}">${connectors}</div></div>`;
+  };
+
   const renderPairs = (data) => {
     const chartScale = data.scale || {};
     const renderPair = (item) => {
@@ -383,11 +665,91 @@
     return `<div class="tension-balance"><div class="balance-beam" aria-hidden="true"><i></i></div><div class="balance-grid">${side(t("long_forces"), data.long, "long")}<div class="balance-center"><span>${escapeHtml(data.center_label)}</span></div>${side(t("short_forces"), data.short, "short")}</div><div class="tripwire-zone"><h4>${escapeHtml(t("tripwires"))}</h4>${tripwires}</div></div>`;
   };
 
-  const chartRenderers = { "entity-ramp": renderEntityRamp, "destiny-flow": renderFlow, timeline: renderTimeline, "matrix-heat": renderMatrix, "value-stack": renderStack, "odds-board": renderOdds, line: renderLine, "paired-bars": renderPairs, "tension-balance": renderTensionBalance };
+  const chartRenderers = { "entity-ramp": renderEntityRamp, "destiny-flow": renderFlow, timeline: renderTimeline, "matrix-heat": renderMatrix, "value-stack": renderStack, "odds-board": renderOdds, line: renderLine, "history-scrolly": renderHistoryScrolly, "causal-horizon-map": renderCausalHorizonMap, "paired-bars": renderPairs, "tension-balance": renderTensionBalance };
   const renderChart = (chart) => `<figure class="chart-plate" id="chart-${escapeHtml(chart.id)}" data-chart-type="${escapeHtml(chart.type)}"><figcaption><p class="figure-kicker">${escapeHtml(chart.id)} / ${escapeHtml(chart.type)}</p><h3 class="chart-title">${escapeHtml(chart.title)}</h3><p class="chart-subtitle">${escapeHtml(chart.subtitle)}</p></figcaption><div class="chart-plot">${chartRenderers[chart.type]?.(chart.data || {}) || ""}</div>${chart.note ? `<p class="chart-note"><strong>${escapeHtml(t("analyst_note"))}:</strong> ${escapeHtml(chart.note)}</p>` : ""}<p class="chart-source">${escapeHtml(t("sources"))} ${sourceLinks(chart.source_ids)}</p></figure>`;
-  const renderSection = (section) => `<section class="report-section" id="${escapeHtml(section.id)}"><header class="section-head"><p class="section-eyebrow">${escapeHtml(section.eyebrow)}</p><h2 class="section-title">${escapeHtml(section.title)}</h2><p class="section-dek">${escapeHtml(section.dek)}</p></header>${(section.body || []).map(renderBodyBlock).join("")}${(section.charts || []).map(renderChart).join("")}${section.annotation ? `<aside class="annotation"><strong>${escapeHtml(t("analyst_annotation"))}</strong><p>${escapeHtml(section.annotation)}</p></aside>` : ""}${section.takeaways?.length ? `<div class="takeaways"><h3>${escapeHtml(t("decision_takeaways"))}</h3><ul>${section.takeaways.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}</section>`;
+  const renderSection = (section) => {
+    const body = section.body || [];
+    const charts = section.charts || [];
+    const sectionContent = isEditorialDashboard && charts.length
+      ? `${body[0] ? renderBodyBlock(body[0]) : ""}${renderChart(charts[0])}${body.slice(1).map(renderBodyBlock).join("")}${charts.slice(1).map(renderChart).join("")}`
+      : `${body.map(renderBodyBlock).join("")}${charts.map(renderChart).join("")}`;
+    return `<section class="report-section" id="${escapeHtml(section.id)}"><header class="section-head"><p class="section-eyebrow">${escapeHtml(section.eyebrow)}</p><h2 class="section-title">${escapeHtml(section.title)}</h2><p class="section-dek">${escapeHtml(section.dek)}</p></header>${sectionContent}${section.annotation ? `<aside class="annotation"><strong>${escapeHtml(t("analyst_annotation"))}</strong><p>${escapeHtml(section.annotation)}</p></aside>` : ""}${section.takeaways?.length ? `<div class="takeaways"><h3>${escapeHtml(t("decision_takeaways"))}</h3><ul>${section.takeaways.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}</section>`;
+  };
+
+  const uniqueFactIds = (ids = []) => [...new Set(ids)].filter((id) => facts.has(id));
+  const collectFactIds = (value, result = []) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => collectFactIds(item, result));
+      return result;
+    }
+    if (!value || typeof value !== "object") return result;
+    Object.entries(value).forEach(([key, nested]) => {
+      if (key === "fact_id" && typeof nested === "string") result.push(nested);
+      else if (key === "fact_ids" && Array.isArray(nested)) nested.forEach((id) => { if (typeof id === "string") result.push(id); });
+      else collectFactIds(nested, result);
+    });
+    return result;
+  };
+
+  const dashboardForSection = (section) => {
+    const declared = section.dashboard && typeof section.dashboard === "object" ? section.dashboard : {};
+    const sectionFacts = uniqueFactIds(collectFactIds({ body: section.body || [], charts: section.charts || [] }));
+    const globalFacts = uniqueFactIds(report.kpis || []);
+    const candidates = uniqueFactIds([...sectionFacts, ...globalFacts]);
+    const primaryFactId = facts.has(declared.primary_fact_id) ? declared.primary_fact_id : candidates[0];
+    const declaredTrend = uniqueFactIds(declared.trend_fact_ids || []);
+    const primaryUnit = facts.get(primaryFactId)?.unit;
+    const sameUnit = candidates.filter((id) => !primaryUnit || facts.get(id)?.unit === primaryUnit);
+    const trendFactIds = declaredTrend.length >= 2 ? declaredTrend : sameUnit.slice(0, 6);
+    const metricFactIds = uniqueFactIds(declared.metric_fact_ids || []).length
+      ? uniqueFactIds(declared.metric_fact_ids).slice(0, 4)
+      : candidates.filter((id) => id !== primaryFactId).slice(0, 4);
+    const probabilityFacts = candidates.filter((id) => facts.get(id)?.kind === "probability");
+    const declaredScenarios = uniqueFactIds(declared.scenario_fact_ids || []);
+    const scenarioFactIds = (declaredScenarios.length ? declaredScenarios : probabilityFacts).slice(0, 3);
+    return { primaryFactId, trendFactIds, metricFactIds, scenarioFactIds };
+  };
+
+  const renderDashboardTrend = (factIds) => {
+    const series = uniqueFactIds(factIds).map((id) => facts.get(id)).filter((fact) => Number.isFinite(Number(fact?.value)));
+    if (series.length < 2) return "";
+    const values = series.map((fact) => Number(fact.value));
+    const minimum = Math.min(...values);
+    const maximum = Math.max(...values);
+    const span = maximum - minimum || 1;
+    const points = series.map((fact, index) => ({
+      fact,
+      x: 8 + index / Math.max(1, series.length - 1) * 84,
+      y: 84 - (Number(fact.value) - minimum) / span * 64,
+    }));
+    const line = points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+    const marks = points.map((point) => `<button class="dashboard-trend-mark" type="button" data-fact-id="${escapeHtml(point.fact.id)}" aria-label="${escapeHtml(`${point.fact.label}: ${point.fact.display}`)}" style="--trend-x:${point.x}%;--trend-y:${point.y}%"></button>`).join("");
+    return `<section class="dashboard-trend" aria-label="${escapeHtml(t("evidence_trend"))}"><p class="dashboard-subhead">${escapeHtml(t("evidence_trend"))}</p><div class="dashboard-trend-plot"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="8" y1="84" x2="92" y2="84"></line><line x1="8" y1="52" x2="92" y2="52"></line><line x1="8" y1="20" x2="92" y2="20"></line><polyline points="${line}"></polyline></svg>${marks}</div></section>`;
+  };
+
+  const renderDashboardFact = (id, className) => {
+    const fact = facts.get(id);
+    if (!fact) return "";
+    return `<button class="${className}" type="button" data-fact-id="${escapeHtml(id)}"><strong>${escapeHtml(fact.display)}</strong><span>${escapeHtml(fact.label)}</span><small>${escapeHtml(fact.date)}</small></button>`;
+  };
+
+  const renderDashboardState = (section, index) => {
+    const dashboard = dashboardForSection(section);
+    const primary = facts.get(dashboard.primaryFactId);
+    return `<section class="dashboard-state${index === 0 ? " is-active" : ""}" data-dashboard-state="${escapeHtml(section.id)}"${index === 0 ? "" : " hidden"}>
+      <header class="dashboard-head"><p class="dashboard-eyebrow">${escapeHtml(section.eyebrow)} · ${escapeHtml(t("research_dashboard"))}</p><h3>${escapeHtml(section.title)}</h3><p>${escapeHtml(section.dek)}</p></header>
+      ${primary ? `<div class="dashboard-primary-wrap"><p class="dashboard-subhead">${escapeHtml(t("current_reading"))}</p>${renderDashboardFact(primary.id, "dashboard-primary")}</div>` : ""}
+      ${renderDashboardTrend(dashboard.trendFactIds)}
+      ${dashboard.metricFactIds.length ? `<section class="dashboard-metrics"><p class="dashboard-subhead">${escapeHtml(t("chapter_indicators"))}</p><div class="dashboard-metric-grid">${dashboard.metricFactIds.map((id) => renderDashboardFact(id, "dashboard-metric")).join("")}</div></section>` : ""}
+      ${dashboard.scenarioFactIds.length ? `<section class="dashboard-signals"><p class="dashboard-subhead">${escapeHtml(t("decision_signals"))}</p><div class="dashboard-signal-list">${dashboard.scenarioFactIds.map((id) => renderDashboardFact(id, "dashboard-signal")).join("")}</div></section>` : ""}
+      <footer class="dashboard-contract"><p>${escapeHtml(t("contract_summary", { facts: report.facts?.length || 0, sources: report.sources?.length || 0, date: report.meta.as_of }))}</p><p>${escapeHtml(t("evidence_hint"))}</p></footer>
+    </section>`;
+  };
+
+  const renderChapterTrack = () => `<div class="chapter-track"><p class="chapter-track-label">${escapeHtml(t("chapter_progress"))}</p><nav class="rail-nav" aria-label="${escapeHtml(t("contents"))}">${(report.sections || []).map((section, index) => `<a href="#${escapeHtml(section.id)}" data-section-link="${escapeHtml(section.id)}"${index === 0 ? " class=\"is-active\"" : ""}><span>${escapeHtml(section.eyebrow)}</span><strong>${escapeHtml(section.nav_label || section.title)}</strong></a>`).join("")}</nav></div>`;
 
   const renderRail = () => `<aside class="research-rail" aria-label="${escapeHtml(t("report_dashboard"))}"><div class="rail-block"><p class="rail-label">${escapeHtml(t("key_numbers"))}</p><div class="rail-kpis">${(report.kpis || []).map((id) => { const fact = facts.get(id); return fact ? `<button class="kpi" type="button" data-fact-id="${escapeHtml(id)}"><span class="kpi-value">${escapeHtml(fact.display)}</span><span class="kpi-label">${escapeHtml(fact.label)}</span><span class="kpi-date">${escapeHtml(fact.date)}</span></button>` : ""; }).join("")}</div></div><div class="rail-block"><p class="rail-label">${escapeHtml(t("contents"))}</p><nav class="rail-nav">${(report.sections || []).map((section) => `<a href="#${escapeHtml(section.id)}" data-section-link="${escapeHtml(section.id)}">${escapeHtml(section.eyebrow)} · ${escapeHtml(section.title)}</a>`).join("")}</nav></div><div class="rail-block rail-meta"><p class="rail-label">${escapeHtml(t("research_contract"))}</p><p>${escapeHtml(t("contract_summary", { facts: report.facts?.length || 0, sources: report.sources?.length || 0, date: report.meta.as_of }))}</p><p>${escapeHtml(t("evidence_hint"))}</p></div></aside>`;
+  const renderDashboardRail = () => `<aside class="research-rail research-dashboard" aria-label="${escapeHtml(t("report_dashboard"))}" data-active-section="${escapeHtml(report.sections?.[0]?.id || "")}">${(report.sections || []).map(renderDashboardState).join("")}</aside>`;
 
   const sourceLocator = (source) => source.locator && typeof source.locator === "object" ? Object.entries(source.locator).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(" · ") : "";
   const renderSource = (source) => {
@@ -403,21 +765,236 @@
   };
   const renderBackmatter = () => `<section class="backmatter" id="sources"><p class="section-eyebrow">${escapeHtml(t("methods_evidence"))}</p><h2>${escapeHtml(t("how_to_read"))}</h2>${renderPresetChecks()}<h3>${escapeHtml(t("methodology"))}</h3><ul class="method-list">${(report.methodology || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><h3>${escapeHtml(t("disclosures"))}</h3><ul class="disclosure-list">${(report.disclosures || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="source-register" aria-label="${escapeHtml(t("source_register"))}">${(report.sources || []).map(renderSource).join("")}</div></section>`;
 
-  app.innerHTML = `${renderDataDisclosure()}${renderCover()}<div class="report-shell" id="report-content"><div class="report-layout">${renderRail()}<main class="article-flow">${(report.sections || []).map(renderSection).join("")}${renderBackmatter()}</main></div></div>`;
+  app.innerHTML = `${renderDataDisclosure()}${renderCover()}<div class="report-shell" id="report-content">${isEditorialDashboard ? renderChapterTrack() : ""}<div class="report-layout">${isEditorialDashboard ? renderDashboardRail() : renderRail()}<main class="article-flow">${(report.sections || []).map(renderSection).join("")}${renderBackmatter()}</main></div></div>`;
 
-  const setCover = (viewId, focus = false) => {
-    const view = report.theme_atom.views.find((item) => item.id === viewId);
-    if (!view) return;
-    const stage = document.getElementById("cover-stage");
-    stage.dataset.coverMode = view.id;
-    stage.innerHTML = renderCoverVisual(view);
+  const historyControllers = new WeakMap();
+  const setupHistoryScrolly = () => {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    document.querySelectorAll("[data-history-scrolly]").forEach((root) => {
+      const stage = root.querySelector(".history-stage");
+      const chart = root.querySelector(".history-chart");
+      const clip = root.querySelector(".history-focus-clip");
+      const focusWindow = root.querySelector(".history-focus-window");
+      const stageTitle = root.querySelector(".history-stage-title");
+      const stageRange = root.querySelector(".history-stage-range");
+      const steps = [...root.querySelectorAll("[data-scrolly-step]")];
+      const xCount = Math.max(1, Number(root.dataset.xCount));
+      const plotLeft = Number(root.dataset.plotLeft);
+      const plotRight = Number(root.dataset.plotRight);
+      const xAtIndex = (index) => plotLeft + Number(index) / Math.max(1, xCount - 1) * (plotRight - plotLeft);
+
+      root.dataset.reducedMotion = String(reducedMotion);
+      root.dataset.historyMode = reducedMotion ? "static" : "interactive";
+
+      const setScene = (requestedIndex) => {
+        if (!steps.length || !chart) return;
+        const index = Math.max(0, Math.min(steps.length - 1, Number(requestedIndex) || 0));
+        const active = steps[index];
+        const sceneStart = Number(active.dataset.startIndex);
+        const sceneEnd = Number(active.dataset.endIndex);
+        const focusStart = reducedMotion ? 0 : sceneStart;
+        const focusEnd = reducedMotion ? xCount - 1 : sceneEnd;
+        const focusX = xAtIndex(focusStart);
+        const focusWidth = Math.max(2, xAtIndex(focusEnd) - focusX);
+
+        root.dataset.activeScene = active.dataset.sceneId;
+        root.dataset.activeSceneIndex = String(index);
+        stage.dataset.sceneId = active.dataset.sceneId;
+        chart.dataset.sceneStartIndex = String(sceneStart);
+        chart.dataset.sceneEndIndex = String(sceneEnd);
+        chart.dataset.focusStart = reducedMotion ? steps[0].dataset.startLabel : active.dataset.startLabel;
+        chart.dataset.focusEnd = reducedMotion ? steps[steps.length - 1].dataset.endLabel : active.dataset.endLabel;
+        if (clip) {
+          clip.setAttribute("x", String(focusX));
+          clip.setAttribute("width", String(focusWidth));
+        }
+        if (focusWindow) {
+          focusWindow.setAttribute("x", String(focusX));
+          focusWindow.setAttribute("width", String(focusWidth));
+        }
+        if (stageTitle) stageTitle.textContent = active.dataset.sceneTitle || "";
+        if (stageRange) stageRange.textContent = `${active.dataset.startLabel} — ${active.dataset.endLabel}`;
+        const annotationFactIds = new Set((active.dataset.annotationFactIds || "").split(/\s+/).filter(Boolean));
+
+        steps.forEach((step, stepIndex) => {
+          const selected = stepIndex === index;
+          step.classList.toggle("is-active", selected);
+          step.setAttribute("aria-current", String(selected));
+          step.querySelector("[data-history-scene-trigger]")?.setAttribute("aria-pressed", String(selected));
+        });
+        root.querySelectorAll("[data-point-index]").forEach((mark) => {
+          const pointIndex = Number(mark.dataset.pointIndex);
+          const inScene = reducedMotion || (pointIndex >= sceneStart && pointIndex <= sceneEnd);
+          mark.classList.toggle("is-in-scene", inScene);
+          mark.classList.toggle("is-active", inScene);
+          mark.classList.toggle("is-annotated", annotationFactIds.has(mark.dataset.factId));
+        });
+        root.querySelectorAll("[data-label-index]").forEach((label) => {
+          const labelIndex = Number(label.dataset.labelIndex);
+          label.classList.toggle("is-in-scene", reducedMotion || (labelIndex >= sceneStart && labelIndex <= sceneEnd));
+        });
+      };
+
+      historyControllers.set(root, setScene);
+      steps.forEach((step, index) => {
+        step.querySelector("[data-history-scene-trigger]")?.addEventListener("click", () => setScene(index));
+      });
+      setScene(0);
+
+      if (!reducedMotion && "IntersectionObserver" in window) {
+        const visibility = new Map();
+        const sceneObserver = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => visibility.set(entry.target, entry.isIntersecting ? entry.intersectionRatio : 0));
+          const visible = [...visibility.entries()].filter(([, ratio]) => ratio > 0).sort((a, b) => b[1] - a[1]);
+          if (visible.length) setScene(steps.indexOf(visible[0][0]));
+        }, { rootMargin: "-26% 0px -46%", threshold: [0.15, 0.35, 0.6, 0.85] });
+        steps.forEach((step) => sceneObserver.observe(step));
+      }
+    });
+  };
+  setupHistoryScrolly();
+
+  const coverStage = document.getElementById("cover-stage");
+  const coverViews = report.theme_atom?.views || [];
+  const reducedCoverMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  let coverRequest = 0;
+
+  const setCoverTabs = (view, focus = false, busy = false) => {
     document.querySelectorAll("[data-cover-view]").forEach((button) => {
       const selected = button.dataset.coverView === view.id;
       button.setAttribute("aria-selected", String(selected));
       button.tabIndex = selected ? 0 : -1;
-      if (selected) stage.setAttribute("aria-labelledby", button.id);
-      if (selected && focus) button.focus();
+      if (selected) {
+        coverStage.setAttribute("aria-labelledby", button.id);
+        if (busy) button.setAttribute("aria-busy", "true");
+        else button.removeAttribute("aria-busy");
+        if (focus) button.focus();
+      } else {
+        button.removeAttribute("aria-busy");
+      }
     });
+  };
+
+  const setCoverBusy = (view, busy) => {
+    coverStage.setAttribute("aria-busy", String(busy));
+    coverStage.dataset.coverReady = String(!busy);
+    document.documentElement.dataset.coverReady = String(!busy);
+    coverStage.classList.toggle("is-cover-loading", busy);
+    setCoverTabs(view, false, busy);
+  };
+
+  const coverVisualElement = (view, forceFallback = false) => {
+    const template = document.createElement("template");
+    template.innerHTML = renderCoverVisual(view, { forceFallback }).trim();
+    return template.content.firstElementChild;
+  };
+
+  const waitForCoverImage = async (image) => {
+    if (!(image instanceof HTMLImageElement)) throw new Error("cover asset did not produce an image element");
+    if (!image.complete) {
+      await new Promise((resolve, reject) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", () => reject(new Error("cover asset failed to load")), { once: true });
+      });
+    }
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error("cover asset decoded with empty dimensions");
+    if (typeof image.decode === "function") {
+      try { await image.decode(); } catch (_error) {
+        if (!image.complete || !image.naturalWidth) throw _error;
+      }
+    }
+    image.classList.add("is-ready");
+    image.dataset.coverDecoded = "true";
+    return image;
+  };
+
+  const settleCoverVisual = async (view, incoming, requestId) => {
+    if (requestId !== coverRequest) { incoming.remove(); return false; }
+    const previous = [...coverStage.querySelectorAll("[data-cover-visual].is-active")].filter((element) => element !== incoming);
+    coverStage.dataset.coverMode = view.id;
+    coverStage.dataset.coverRenderer = incoming.dataset.coverRenderer || "fallback";
+    coverStage.dataset.coverAssetError = incoming.dataset.coverRenderer === "asset" ? "false" : String(Boolean(view.asset));
+    incoming.setAttribute("aria-hidden", "false");
+    previous.forEach((element) => {
+      element.classList.remove("is-active");
+      element.classList.add("is-leaving");
+      element.setAttribute("aria-hidden", "true");
+    });
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    incoming.classList.add("is-active");
+    if (!reducedCoverMotion && previous.length) await new Promise((resolve) => window.setTimeout(resolve, 340));
+    previous.forEach((element) => element.remove());
+    if (requestId !== coverRequest) return false;
+    setCoverBusy(view, false);
+    return true;
+  };
+
+  const activateCover = async (view, focus = false) => {
+    if (!view || !coverStage) return false;
+    const current = coverStage.querySelector("[data-cover-visual].is-active");
+    if (current?.dataset.coverVisualId === view.id && coverStage.dataset.coverReady === "true") {
+      setCoverTabs(view, focus, false);
+      return true;
+    }
+
+    const requestId = ++coverRequest;
+    setCoverTabs(view, focus, true);
+    setCoverBusy(view, true);
+    coverStage.dataset.coverPending = view.id;
+    coverStage.querySelectorAll("[data-cover-visual].is-leaving").forEach((element) => element.remove());
+    let incoming = coverVisualElement(view);
+    if (!incoming) { setCoverBusy(view, false); return false; }
+    coverStage.append(incoming);
+
+    if (incoming.dataset.coverRenderer === "asset") {
+      try {
+        await waitForCoverImage(incoming.querySelector(".cover-image"));
+      } catch (_error) {
+        incoming.remove();
+        incoming = coverVisualElement(view, true);
+        if (!incoming) { setCoverBusy(view, false); return false; }
+        incoming.dataset.coverAssetError = "true";
+        coverStage.append(incoming);
+      }
+    }
+    const settled = await settleCoverVisual(view, incoming, requestId);
+    if (settled) delete coverStage.dataset.coverPending;
+    return settled;
+  };
+
+  const setupInitialCover = async () => {
+    const active = coverViews[0];
+    const visual = coverStage?.querySelector("[data-cover-visual].is-active");
+    if (!active || !coverStage || !visual) return false;
+    const initialRequest = coverRequest;
+    setCoverTabs(active, false, visual.dataset.coverRenderer === "asset");
+    if (visual.dataset.coverRenderer === "asset") {
+      try {
+        await waitForCoverImage(visual.querySelector(".cover-image"));
+      } catch (_error) {
+        if (coverRequest !== initialRequest) return false;
+        const fallback = coverVisualElement(active, true);
+        if (!fallback) return false;
+        fallback.classList.add("is-active");
+        fallback.setAttribute("aria-hidden", "false");
+        fallback.dataset.coverAssetError = "true";
+        visual.replaceWith(fallback);
+        coverStage.dataset.coverRenderer = fallback.dataset.coverRenderer || "fallback";
+        coverStage.dataset.coverAssetError = "true";
+      }
+    }
+    if (coverRequest !== initialRequest) return false;
+    setCoverBusy(active, false);
+    document.documentElement.dataset.coverReady = "true";
+    return true;
+  };
+
+  window.__VRR_COVER_READY__ = setupInitialCover();
+
+  const setCover = (viewId, focus = false) => {
+    const view = coverViews.find((item) => item.id === viewId);
+    if (!view) return Promise.resolve(false);
+    return activateCover(view, focus);
   };
 
   const setAppInert = (inert) => {
@@ -453,7 +1030,7 @@
     const factTarget = event.target.closest("[data-fact-id]");
     if (factTarget) { event.preventDefault(); openDrawer(factTarget.dataset.factId, factTarget); return; }
     const coverButton = event.target.closest("[data-cover-view]");
-    if (coverButton) { setCover(coverButton.dataset.coverView); return; }
+    if (coverButton) { void setCover(coverButton.dataset.coverView); return; }
     if (event.target.closest("[data-close-drawer]")) closeDrawer();
   });
 
@@ -464,7 +1041,7 @@
       const tabs = [...document.querySelectorAll("[data-cover-view]")];
       const index = tabs.indexOf(coverButton);
       const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
-      setCover(tabs[next].dataset.coverView, true);
+      void setCover(tabs[next].dataset.coverView, true);
       return;
     }
     const factTarget = event.target.closest?.("[data-fact-id]");
@@ -492,7 +1069,55 @@
 
   if ("IntersectionObserver" in window) {
     const links = new Map([...document.querySelectorAll("[data-section-link]")].map((link) => [link.dataset.sectionLink, link]));
-    const observer = new IntersectionObserver((entries) => entries.filter((entry) => entry.isIntersecting).forEach((entry) => links.forEach((link) => link.classList.toggle("is-active", link.dataset.sectionLink === entry.target.id))), { rootMargin: "-20% 0px -65%", threshold: 0 });
-    document.querySelectorAll(".report-section").forEach((section) => observer.observe(section));
+    const activateSection = (sectionId) => {
+      links.forEach((link) => {
+        const activeLink = link.dataset.sectionLink === sectionId;
+        link.classList.toggle("is-active", activeLink);
+        if (activeLink) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
+      document.querySelectorAll("[data-dashboard-state]").forEach((state) => {
+        const activeState = state.dataset.dashboardState === sectionId;
+        state.hidden = !activeState;
+        state.classList.toggle("is-active", activeState);
+      });
+      const dashboardRail = document.querySelector(".research-dashboard");
+      if (dashboardRail) dashboardRail.dataset.activeSection = sectionId;
+      const active = links.get(sectionId);
+      const nav = active?.closest(".rail-nav");
+      if (active && nav && ["editorial-scrollspy", "editorial-dashboard"].includes(presentationPreset)) {
+        const targetLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+        nav.scrollTo({ left: Math.max(0, targetLeft), behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      }
+    };
+    if (report.sections?.[0]?.id) activateSection(report.sections[0].id);
+    const observedSections = [...document.querySelectorAll(".report-section")];
+    const syncDashboardToViewport = () => {
+      const trackHeight = document.querySelector(".chapter-track")?.getBoundingClientRect().height || 0;
+      const anchor = Math.max(trackHeight + 18, innerHeight * 0.22);
+      const geometry = observedSections.map((section) => ({ section, rect: section.getBoundingClientRect() }));
+      const containing = geometry.find(({ rect }) => rect.top <= anchor && rect.bottom > anchor);
+      const selected = containing || geometry.reduce((best, item) => !best || Math.abs(item.rect.top - anchor) < Math.abs(best.rect.top - anchor) ? item : best, null);
+      if (selected?.section.id) activateSection(selected.section.id);
+    };
+    const observer = new IntersectionObserver((entries) => {
+      if (isEditorialDashboard) syncDashboardToViewport();
+      else entries.filter((entry) => entry.isIntersecting).forEach((entry) => activateSection(entry.target.id));
+    }, { rootMargin: "-20% 0px -65%", threshold: 0 });
+    observedSections.forEach((section) => observer.observe(section));
+    if (isEditorialDashboard) {
+      let dashboardScrollQueued = false;
+      const queueDashboardSync = () => {
+        if (dashboardScrollQueued) return;
+        dashboardScrollQueued = true;
+        requestAnimationFrame(() => {
+          dashboardScrollQueued = false;
+          syncDashboardToViewport();
+        });
+      };
+      window.addEventListener("scroll", queueDashboardSync, { passive: true });
+      window.addEventListener("resize", queueDashboardSync, { passive: true });
+      requestAnimationFrame(syncDashboardToViewport);
+    }
   }
 })();
