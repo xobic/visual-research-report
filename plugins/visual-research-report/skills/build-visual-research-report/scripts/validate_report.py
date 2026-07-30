@@ -32,7 +32,7 @@ SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 STACK_ENCODINGS = {"absolute", "share"}
 SOURCE_CLASSIFICATIONS = {"primary", "secondary"}
 CURRENT_SCHEMA = "visual-research-report@2"
-PRESENTATION_PRESETS = {"institutional-rail", "editorial-longform", "editorial-scrollspy"}
+PRESENTATION_PRESETS = {"institutional-rail", "editorial-longform", "editorial-scrollspy", "editorial-dashboard"}
 EVIDENCE_STATUSES = {"verified", "mixed", "synthetic"}
 LOCATOR_KINDS = {"document", "dataset", "web", "audio-video", "visual"}
 EARNINGS_PRESET = "public-equity-earnings"
@@ -97,6 +97,45 @@ def _fact_ref(value: Any, path: str, fact_ids: set[str], errors: list[str], requ
         return
     if not isinstance(value, str) or value not in fact_ids:
         errors.append(f"{path} must reference an existing fact")
+
+
+def _validate_dashboard(
+    dashboard: Any,
+    path: str,
+    fact_ids: set[str],
+    fact_lookup: dict[str, dict[str, Any]],
+    errors: list[str],
+) -> None:
+    if dashboard is None:
+        return
+    if not isinstance(dashboard, dict):
+        errors.append(f"{path} must be an object")
+        return
+
+    _fact_ref(dashboard.get("primary_fact_id"), f"{path}.primary_fact_id", fact_ids, errors)
+
+    def validate_fact_list(key: str, minimum: int, maximum: int, *, required: bool) -> list[str]:
+        value = dashboard.get(key)
+        if value is None and not required:
+            return []
+        if not isinstance(value, list) or not minimum <= len(value) <= maximum:
+            errors.append(f"{path}.{key} must contain between {minimum} and {maximum} fact ids")
+            return []
+        if len(value) != len(set(value)):
+            errors.append(f"{path}.{key} must not contain duplicate fact ids")
+        _check_refs(value, fact_ids, f"{path}.{key}", errors, required=required)
+        return [item for item in value if isinstance(item, str) and item in fact_ids]
+
+    trend_ids = validate_fact_list("trend_fact_ids", 2, 12, required=False)
+    validate_fact_list("metric_fact_ids", 2, 4, required=True)
+    scenario_ids = validate_fact_list("scenario_fact_ids", 1, 3, required=False)
+
+    trend_units = {fact_lookup[fact_id].get("unit") for fact_id in trend_ids if fact_lookup.get(fact_id, {}).get("unit")}
+    if len(trend_units) > 1:
+        errors.append(f"{path}.trend_fact_ids must reference facts with one shared unit")
+    for fact_id in scenario_ids:
+        if fact_lookup.get(fact_id, {}).get("kind") != "probability":
+            errors.append(f"{path}.scenario_fact_ids must reference probability facts")
 
 
 def _number(value: Any, path: str, errors: list[str]) -> None:
@@ -1233,10 +1272,13 @@ def validate_report(data: dict[str, Any]) -> tuple[list[str], list[str]]:
                 errors.append(f"{path} must be an object")
                 continue
             _require_text(section, ("id", "eyebrow", "title", "dek"), path, errors)
+            if "nav_label" in section and (not isinstance(section.get("nav_label"), str) or not section["nav_label"].strip()):
+                errors.append(f"{path}.nav_label must be a non-empty string")
             section_id = section.get("id")
             if section_id in section_ids:
                 errors.append(f"duplicate section id: {section_id}")
             section_ids.add(section_id)
+            _validate_dashboard(section.get("dashboard"), f"{path}.dashboard", fact_ids, fact_lookup, errors)
             body = section.get("body")
             if not isinstance(body, list) or not body:
                 errors.append(f"{path}.body must be a non-empty array")

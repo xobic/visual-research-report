@@ -8,7 +8,7 @@ Compile the factual layer before touching presentation code. The minimum input i
 - `meta`: `title`, `subtitle`, `kicker`, `publisher`, `as_of`, `language`, and `summary`.
 - `evidence_status`: `verified`, `mixed`, or `synthetic`.
 - `data_disclosure`: required for `mixed` and `synthetic`; provide `label`, `scope`, and placements such as `top-banner`, `methodology`, and `package-manifest`.
-- `presentation`: `preset` is `institutional-rail`, `editorial-longform`, or `editorial-scrollspy`; optional `reference_contract` records the supplied reference and measured geometry.
+- `presentation`: `preset` is `institutional-rail`, `editorial-longform`, `editorial-scrollspy`, or `editorial-dashboard`; optional `reference_contract` records the supplied reference and measured geometry.
 - `ui_labels` (optional): string-to-string overrides for interface copy. The renderer supplies complete `en-US` and `zh-CN` dictionaries, selected from `meta.language`.
 - `theme_atom`: `name`, `description`, and exactly four `views` with IDs `recursive`, `exploded`, `blueprint`, and `impact`; `production` declares `image-2`, supplied, or schematic rendering; optional `identity_lock`, `camera_lock`, and `schematic` preserve one physical object across states.
 - `sources`: stable `Sxx` source records.
@@ -192,7 +192,24 @@ Use two to twelve unique parts. Part coordinates are normalized from 0 to 100; `
 
 ## Presentation and reference contract
 
-Use `presentation.preset: "editorial-longform"` for a flat research-paper page. Use `editorial-scrollspy` when the same 1440px page, 1120px chart plate, and 720px prose measures need a sticky segmented chapter track. Use `institutional-rail` when a persistent KPI dashboard is part of the reading task.
+Use `presentation.preset: "editorial-longform"` for a flat research-paper page. Use `editorial-scrollspy` when the same 1440px page, 1120px chart plate, and 720px prose measures need only a sticky segmented chapter track. Use `editorial-dashboard` when each chapter needs a persistent, synchronized evidence rail in addition to the chapter track. Use `institutional-rail` for a conventional persistent KPI/navigation rail.
+
+For `editorial-dashboard`, a section may provide a short `nav_label` plus a fact-only dashboard contract. Values, dates, labels, and sources always come from the referenced facts:
+
+```json
+{
+  "id": "capacity-system",
+  "nav_label": "Capacity",
+  "dashboard": {
+    "primary_fact_id": "F02",
+    "trend_fact_ids": ["F01", "F05", "F02"],
+    "metric_fact_ids": ["F06", "F08", "F09", "F10"],
+    "scenario_fact_ids": ["F03", "F21", "F22"]
+  }
+}
+```
+
+`primary_fact_id` is required when `dashboard` exists. `metric_fact_ids` contains two to four unique facts. Optional `trend_fact_ids` contains two to twelve ordered facts sharing one unit. Optional `scenario_fact_ids` contains one to three probability facts. If the entire `dashboard` object is absent, the renderer falls back deterministically to section facts and root KPIs; explicit configuration is preferred for production work.
 
 If the user supplies a screenshot or brand target, record it without turning pixel dimensions into arbitrary design knobs:
 

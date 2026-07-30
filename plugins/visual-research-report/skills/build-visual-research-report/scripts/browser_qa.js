@@ -105,7 +105,7 @@ async page => {
       const geometry = await page.evaluate(() => {
         const rail = document.querySelector('.research-rail');
         const firstSection = document.querySelector('.report-section');
-        const touchSelectors = '.fact-chip,.cover-switcher button,.drawer-close,.rail-nav a,.flow-link,.pair-control,.pair-multiplier,.heat-cell,.odds-card,.entity-period,.line-mark,.balance-weight,.tripwire,.history-mark,.history-scene-trigger,.history-annotation-fact,.causal-fact,.causal-sparkline-mark';
+        const touchSelectors = '.fact-chip,.cover-switcher button,.drawer-close,.rail-nav a,.dashboard-primary,.dashboard-metric,.dashboard-signal,.dashboard-trend-mark,.flow-link,.pair-control,.pair-multiplier,.heat-cell,.odds-card,.entity-period,.line-mark,.balance-weight,.tripwire,.history-mark,.history-scene-trigger,.history-annotation-fact,.causal-fact,.causal-sparkline-mark';
         const allowedOverflow = element => element.closest?.('.matrix-wrap,.line-wrap,.flow-grid,.history-stage,.causal-horizon-map,.rail-nav');
         const escapedElements = [...document.querySelectorAll('body *')].filter(element => {
           if (allowedOverflow(element) || element.closest?.('[hidden]')) return false;
@@ -122,7 +122,17 @@ async page => {
           railTop: rail?.getBoundingClientRect().top ?? null,
           firstTop: firstSection?.getBoundingClientRect().top ?? null,
           railPosition: rail ? getComputedStyle(rail).position : null,
+          railDisplay: rail ? getComputedStyle(rail).display : null,
           railTopCss: rail ? getComputedStyle(rail).top : null,
+          railWidth: rail?.getBoundingClientRect().width ?? 0,
+          layoutWidth: document.querySelector('.report-layout')?.getBoundingClientRect().width ?? 0,
+          chapterTrack: document.querySelector('.chapter-track') ? {
+            position: getComputedStyle(document.querySelector('.chapter-track')).position,
+            top: getComputedStyle(document.querySelector('.chapter-track')).top,
+            height: document.querySelector('.chapter-track').getBoundingClientRect().height,
+          } : null,
+          dashboardActiveSection: document.querySelector('.research-dashboard')?.dataset.activeSection || '',
+          activeDashboardStates: document.querySelectorAll('[data-dashboard-state]:not([hidden])').length,
           railNavScroll: document.querySelector('.rail-nav') ? {
             width: document.querySelector('.rail-nav').clientWidth,
             scrollWidth: document.querySelector('.rail-nav').scrollWidth,
@@ -170,7 +180,7 @@ async page => {
         };
       });
       assert(geometry.lang.length > 0, `${label}: document language missing`);
-      assert(['editorial-longform', 'editorial-scrollspy', 'institutional-rail'].includes(geometry.preset), `${label}: unknown design preset`);
+      assert(['editorial-longform', 'editorial-scrollspy', 'editorial-dashboard', 'institutional-rail'].includes(geometry.preset), `${label}: unknown design preset`);
       assert(geometry.overflow <= 1, `${label}: document overflows horizontally by ${geometry.overflow}px`);
       assert(geometry.escapedElements.length === 0, `${label}: elements escape viewport: ${geometry.escapedElements.join(', ')}`);
       assert(geometry.coverTabs === 4, `${label}: expected four cover tabs, found ${geometry.coverTabs}`);
@@ -194,12 +204,26 @@ async page => {
       assert(geometry.smallTargets.length === 0, `${label}: touch targets below 40px: ${geometry.smallTargets.join(', ')}`);
       assert(geometry.duplicateChartFacts.length === 0, `${label}: duplicate chart fact controls: ${geometry.duplicateChartFacts.join(', ')}`);
       assert(geometry.sourceAnchors, `${label}: chart source anchor does not resolve`);
-      if (viewport.width < 1100 && geometry.preset !== 'editorial-scrollspy') assert(geometry.railTop < geometry.firstTop, `${label}: directory/rail does not precede report body`);
+      if (viewport.width < 1100 && !['editorial-scrollspy', 'editorial-dashboard'].includes(geometry.preset)) assert(geometry.railTop < geometry.firstTop, `${label}: directory/rail does not precede report body`);
       if (geometry.preset === 'editorial-longform' && viewport.width >= 1100) assert(geometry.railPosition !== 'sticky', `${label}: editorial directory must not be sticky`);
       if (geometry.preset === 'editorial-scrollspy') {
         assert(geometry.railPosition === 'sticky', `${label}: editorial chapter track is not sticky`);
         assert(geometry.railTopCss === '0px', `${label}: editorial chapter track does not pin to the viewport top`);
         assert(geometry.railNavScroll && geometry.railNavScroll.scrollWidth >= geometry.railNavScroll.width, `${label}: chapter track scroll geometry is invalid`);
+      }
+      if (geometry.preset === 'editorial-dashboard') {
+        assert(geometry.chapterTrack?.position === 'sticky', `${label}: dashboard chapter track is not sticky`);
+        assert(geometry.chapterTrack?.top === '0px', `${label}: dashboard chapter track does not pin to the viewport top`);
+        assert(geometry.chapterTrack?.height <= (viewport.width >= 1100 ? 52 : 60), `${label}: dashboard chapter track is too tall`);
+        if (viewport.width >= 1100) {
+          assert(geometry.railPosition === 'sticky', `${label}: research dashboard is not sticky`);
+          assert(geometry.railDisplay !== 'none', `${label}: research dashboard is hidden on desktop`);
+          assert(geometry.layoutWidth > 0 && geometry.railWidth / geometry.layoutWidth >= 0.25 && geometry.railWidth / geometry.layoutWidth <= 0.32, `${label}: research dashboard width is outside the 25–32% target`);
+          assert(geometry.activeDashboardStates === 1, `${label}: exactly one research dashboard state must be visible`);
+          assert(Boolean(geometry.dashboardActiveSection), `${label}: research dashboard lacks an active section marker`);
+        } else {
+          assert(geometry.railDisplay === 'none', `${label}: research dashboard should collapse below desktop width`);
+        }
       }
       assert(geometry.histories.length > 0, `${label}: history-scrolly did not render`);
       geometry.histories.forEach((history, index) => {
@@ -265,9 +289,19 @@ async page => {
       const href = await nav.getAttribute('href');
       await nav.click();
       assert((await page.evaluate(() => location.hash)) === href, `${label}: directory link did not update the anchor`);
-      if (geometry.preset === 'editorial-scrollspy') {
+      if (['editorial-scrollspy', 'editorial-dashboard'].includes(geometry.preset)) {
         await page.waitForTimeout(120);
         assert(await nav.evaluate(element => element.classList.contains('is-active')), `${label}: chapter scrollspy did not activate the selected section`);
+      }
+      if (geometry.preset === 'editorial-dashboard' && viewport.width >= 1100) {
+        const firstEvidenceTop = await page.locator('.report-section').first().locator('.chart-plate').first().evaluate(element => element.getBoundingClientRect().top);
+        assert(firstEvidenceTop < Math.min(viewport.height * 0.78, 720), `${label}: first evidence chart begins too far below the chapter opener (${Math.round(firstEvidenceTop)}px)`);
+        const secondNav = page.locator('.rail-nav a').nth(1);
+        const secondSection = await secondNav.getAttribute('data-section-link');
+        await secondNav.click();
+        await page.waitForTimeout(180);
+        const syncedSection = await page.locator('.research-dashboard').getAttribute('data-active-section');
+        assert(syncedSection === secondSection, `${label}: research dashboard did not sync to the selected chapter`);
       }
 
       const trigger = page.locator('.kpi[data-fact-id]:visible,.fact-chip[data-fact-id]:visible,[data-chart-type] [data-fact-id]:visible').first();

@@ -215,6 +215,37 @@ class ContractTests(unittest.TestCase):
         self.assertEqual([], errors)
         self.assertEqual([], warnings)
 
+    def test_editorial_dashboard_contract_is_valid(self) -> None:
+        report = self.mutate()
+        self.assertEqual("editorial-dashboard", report["presentation"]["preset"])
+        self.assertTrue(all(section.get("nav_label") for section in report["sections"]))
+        self.assertTrue(all(section.get("dashboard") for section in report["sections"]))
+        errors, warnings = validate_report(report)
+        self.assertEqual([], errors)
+        self.assertEqual([], warnings)
+
+    def test_editorial_dashboard_supports_deterministic_fallback(self) -> None:
+        report = self.mutate()
+        for section in report["sections"]:
+            section.pop("dashboard", None)
+            section.pop("nav_label", None)
+        errors, warnings = validate_report(report)
+        self.assertEqual([], errors)
+        self.assertEqual([], warnings)
+
+    def test_dashboard_rejects_bad_fact_shapes(self) -> None:
+        mutations = {
+            "unknown primary": lambda dashboard: dashboard.update(primary_fact_id="F999"),
+            "duplicate metrics": lambda dashboard: dashboard.update(metric_fact_ids=["F06", "F06"]),
+            "mixed trend units": lambda dashboard: dashboard.update(trend_fact_ids=["F01", "F03"]),
+            "non-probability scenario": lambda dashboard: dashboard.update(scenario_fact_ids=["F01"]),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                report = self.mutate()
+                mutate(report["sections"][0]["dashboard"])
+                self.assert_error_contains(report, "dashboard")
+
     def test_optional_theme_atom_schematic_is_valid(self) -> None:
         report = self.mutate()
         atom = report["theme_atom"]

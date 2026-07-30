@@ -1,7 +1,7 @@
 {
   "name": "visual-research-report",
-  "version": "0.4.0",
-  "description": "Turn source reports into traceable editorial research sites with Image 2 theme-atom covers and offline deliverables.",
+  "version": "0.5.0",
+  "description": "Turn source reports into traceable editorial research sites with synchronized evidence dashboards, Image 2 theme-atom covers, and offline deliverables.",
   "author": {
     "name": "Gao"
   },
@@ -18,7 +18,7 @@
   "interface": {
     "displayName": "Visual Research Report",
     "shortDescription": "Build traceable editorial research websites.",
-    "longDescription": "Compiles a deep report into a sourced data layer, reference-faithful editorial or institutional layouts, sticky chapter navigation, scroll-driven history, causal-horizon maps, an Image 2 identity-locked four-view theme-atom cover, drill-down evidence cards, and verified multi-file, single-file, and optional PDF deliverables.",
+    "longDescription": "Compiles a deep report into a sourced data layer, reference-faithful editorial or institutional layouts, compact chapter navigation, chapter-synchronized evidence dashboards, scroll-driven history, causal-horizon maps, an Image 2 identity-locked four-view theme-atom cover, drill-down evidence cards, and verified multi-file, single-file, and optional PDF deliverables.",
     "developerName": "Gao",
     "category": "Productivity",
     "websiteURL": "https://github.com/xobic/visual-research-report",

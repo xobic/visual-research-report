@@ -27,7 +27,8 @@ REQUIRED_APP_TOKENS = (
     "report.ui_labels", "app.inert", "data-stack-share", "data-scroll-latest",
     'role=\"tab\"', "ArrowRight", "drawerFocusable", "data-contained-overflow",
     "tension-balance", "history-scrolly", "causal-horizon-map", "data-history-mode",
-    "data-node-id", "atom-engineering-svg", "() => String(value)",
+    "data-node-id", "atom-engineering-svg", "editorial-dashboard", "chapter-track",
+    "data-dashboard-state", "() => String(value)",
 )
 COVER_VIEW_IDS = ("recursive", "exploded", "blueprint", "impact")
 DATA_URI_PATTERN = re.compile(r"^data:([^;,]+);base64,([A-Za-z0-9+/]*={0,2})$")

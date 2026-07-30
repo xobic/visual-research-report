@@ -2,7 +2,7 @@
   "schema": "visual-research-report@2",
   "evidence_status": "synthetic",
   "presentation": {
-    "preset": "editorial-scrollspy"
+    "preset": "editorial-dashboard"
   },
   "data_disclosure": {
     "label": "Design demonstration · every numeric fact is synthetic",
@@ -189,11 +189,18 @@
   ],
   "kpis": ["F02", "F04", "F03"],
   "sections": [
-    {
-      "id": "capacity-system",
-      "eyebrow": "01 / Capacity",
-      "title": "Capacity arrives as physical packages, not a smooth curve",
-      "dek": "The entity ramp and process flow expose the discreteness and attrition hidden by aggregate forecasts.",
+  {
+    "id": "capacity-system",
+    "nav_label": "Capacity",
+    "eyebrow": "01 / Capacity",
+    "title": "Capacity arrives as physical packages, not a smooth curve",
+    "dek": "The entity ramp and process flow expose the discreteness and attrition hidden by aggregate forecasts.",
+    "dashboard": {
+      "primary_fact_id": "F02",
+      "trend_fact_ids": ["F01", "F05", "F02"],
+      "metric_fact_ids": ["F06", "F08", "F09", "F10"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"paragraph","text":"This synthetic example treats the 2.5D package as the unit of analysis. Capacity expands in steps, while lots are lost between input, assembly, qualification and shipment.","fact_ids":["F01","F02"]},
         {"type":"quote","text":"All figures in this demonstration are synthetic and exist only to test the plugin.","source_ids":["S01"]}
@@ -221,11 +228,18 @@
       "annotation": "The entity view makes capacity additions legible; the flow view prevents the reader from treating nameplate capacity as sellable output.",
       "takeaways": ["Track physical bottlenecks separately from announced capacity.", "Do not equate installed tools with qualified shipment volume."]
     },
-    {
-      "id": "competition-value",
-      "eyebrow": "02 / Positioning",
-      "title": "Competitive advantage changes by dimension and layer",
-      "dek": "A matrix supports multi-dimensional scanning; a value stack preserves the physical order of the package.",
+  {
+    "id": "competition-value",
+    "nav_label": "Positioning",
+    "eyebrow": "02 / Positioning",
+    "title": "Competitive advantage changes by dimension and layer",
+    "dek": "A matrix supports multi-dimensional scanning; a value stack preserves the physical order of the package.",
+    "dashboard": {
+      "primary_fact_id": "F20",
+      "trend_fact_ids": ["F17", "F18", "F19", "F20"],
+      "metric_fact_ids": ["F13", "F15", "F11", "F14"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"paragraph","text":"Synthetic vendor scores show that leadership is not one-dimensional. The value pool also concentrates in later assembly, test and qualification steps.","fact_ids":["F13","F15","F20"]}
       ],
@@ -236,11 +250,18 @@
       "annotation": "Heat intensity supports scanning, but every cell retains its number. The stack is ordered by the physical assembly rather than by visual size.",
       "takeaways": ["Benchmark by constraint, not by a single composite score.", "Map economics onto the physical package before discussing market share."]
     },
-    {
-      "id": "history-scenarios",
-      "eyebrow": "03 / Timing",
-      "title": "History explains the setup; probabilities expose the judgment",
-      "dek": "The timeline separates sequence from forecast, while the odds board makes scenario assumptions explicit.",
+  {
+    "id": "history-scenarios",
+    "nav_label": "Timing",
+    "eyebrow": "03 / Timing",
+    "title": "History explains the setup; probabilities expose the judgment",
+    "dek": "The timeline separates sequence from forecast, while the odds board makes scenario assumptions explicit.",
+    "dashboard": {
+      "primary_fact_id": "F03",
+      "trend_fact_ids": ["F23", "F24", "F25", "F26"],
+      "metric_fact_ids": ["F26", "F30", "F31", "F32"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"callout","title":"Interpretation boundary","text":"A probability is an analyst judgment as of a date, not a reported future fact.","fact_ids":["F03"]}
       ],
@@ -270,11 +291,18 @@
       "annotation": "The visual grammar deliberately separates dated observations from forward-looking odds.",
       "takeaways": ["Tie every probability to a horizon and observable trigger.", "Update the odds board when evidence changes, not on a fixed aesthetic cadence."]
     },
-    {
-      "id": "precision-window",
-      "eyebrow": "04 / Precision",
-      "title": "Use conventional charts only when exact reading is the task",
-      "dek": "A line chart is justified for the demand-supply path; paired bars are justified for explicit scenario comparisons.",
+  {
+    "id": "precision-window",
+    "nav_label": "Precision",
+    "eyebrow": "04 / Precision",
+    "title": "Use conventional charts only when exact reading is the task",
+    "dek": "A line chart is justified for the demand-supply path; paired bars are justified for explicit scenario comparisons.",
+    "dashboard": {
+      "primary_fact_id": "F26",
+      "trend_fact_ids": ["F23", "F24", "F25", "F26"],
+      "metric_fact_ids": ["F26", "F30", "F31", "F32"],
+      "scenario_fact_ids": ["F03", "F21", "F22"]
+    },
       "body": [
         {"type":"paragraph","text":"The line chart is not a default. It appears here because the exact gap across ordered years matters. The paired bars exist because two named cases must be compared directly.","fact_ids":["F26","F30","F31","F32"]}
       ],

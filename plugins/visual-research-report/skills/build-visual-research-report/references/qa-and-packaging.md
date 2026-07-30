@@ -49,6 +49,7 @@ Run desktop (1440×1000), tablet (1024×900), and mobile (390×844):
 - multi-series line styles are distinct and the mobile scroller starts at the latest observation;
 - source links resolve to stable anchors and reduced-motion mode remains usable.
 - `editorial-scrollspy` keeps its chapter track sticky without covering anchored headings or creating page overflow;
+- `editorial-dashboard` keeps a 48–52px desktop chapter track, a 25–32% sticky evidence rail, exactly one visible chapter state, and the first chart within the chapter opener viewport; selecting another chapter updates both navigation and rail state;
 - every `history-scrolly` scene activates in order, updates the declared focus window, and falls back to a complete static chart under reduced motion;
 - every causal node exposes direction and confidence in text, keeps its sparkline inside the node, and preserves one local focus target per fact;
 - engineering schematic parts remain the same across all four cover views when schematic mode is selected;

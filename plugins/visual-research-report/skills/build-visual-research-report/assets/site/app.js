@@ -38,6 +38,12 @@
     analyst_annotation: "Analyst annotation",
     decision_takeaways: "Decision takeaways",
     report_dashboard: "Report dashboard",
+    chapter_progress: "Chapter progress",
+    research_dashboard: "Research dashboard",
+    current_reading: "Current reading",
+    chapter_indicators: "Chapter indicators",
+    decision_signals: "Decision signals",
+    evidence_trend: "Evidence trend",
     key_numbers: "Key numbers",
     contents: "Contents",
     research_contract: "Research contract",
@@ -104,6 +110,12 @@
     analyst_annotation: "分析师判断",
     decision_takeaways: "决策要点",
     report_dashboard: "研究仪表盘",
+    chapter_progress: "章节进度",
+    research_dashboard: "研究仪表盘",
+    current_reading: "当前读数",
+    chapter_indicators: "章节指标",
+    decision_signals: "决策信号",
+    evidence_trend: "证据趋势",
     key_numbers: "关键数字",
     contents: "目录",
     research_contract: "研究口径",
@@ -156,8 +168,11 @@
     labels[key] ?? EN[key] ?? key,
   );
 
+  const presentationPreset = report.presentation?.preset || "institutional-rail";
+  const isEditorialDashboard = presentationPreset === "editorial-dashboard";
+
   document.documentElement.lang = language;
-  document.documentElement.dataset.designPreset = report.presentation?.preset || "institutional-rail";
+  document.documentElement.dataset.designPreset = presentationPreset;
   document.title = report.meta.title || "Visual Research Report";
   skipLink.textContent = t("skip_to_report");
   noScript.textContent = t("javascript_required");
@@ -652,9 +667,89 @@
 
   const chartRenderers = { "entity-ramp": renderEntityRamp, "destiny-flow": renderFlow, timeline: renderTimeline, "matrix-heat": renderMatrix, "value-stack": renderStack, "odds-board": renderOdds, line: renderLine, "history-scrolly": renderHistoryScrolly, "causal-horizon-map": renderCausalHorizonMap, "paired-bars": renderPairs, "tension-balance": renderTensionBalance };
   const renderChart = (chart) => `<figure class="chart-plate" id="chart-${escapeHtml(chart.id)}" data-chart-type="${escapeHtml(chart.type)}"><figcaption><p class="figure-kicker">${escapeHtml(chart.id)} / ${escapeHtml(chart.type)}</p><h3 class="chart-title">${escapeHtml(chart.title)}</h3><p class="chart-subtitle">${escapeHtml(chart.subtitle)}</p></figcaption><div class="chart-plot">${chartRenderers[chart.type]?.(chart.data || {}) || ""}</div>${chart.note ? `<p class="chart-note"><strong>${escapeHtml(t("analyst_note"))}:</strong> ${escapeHtml(chart.note)}</p>` : ""}<p class="chart-source">${escapeHtml(t("sources"))} ${sourceLinks(chart.source_ids)}</p></figure>`;
-  const renderSection = (section) => `<section class="report-section" id="${escapeHtml(section.id)}"><header class="section-head"><p class="section-eyebrow">${escapeHtml(section.eyebrow)}</p><h2 class="section-title">${escapeHtml(section.title)}</h2><p class="section-dek">${escapeHtml(section.dek)}</p></header>${(section.body || []).map(renderBodyBlock).join("")}${(section.charts || []).map(renderChart).join("")}${section.annotation ? `<aside class="annotation"><strong>${escapeHtml(t("analyst_annotation"))}</strong><p>${escapeHtml(section.annotation)}</p></aside>` : ""}${section.takeaways?.length ? `<div class="takeaways"><h3>${escapeHtml(t("decision_takeaways"))}</h3><ul>${section.takeaways.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}</section>`;
+  const renderSection = (section) => {
+    const body = section.body || [];
+    const charts = section.charts || [];
+    const sectionContent = isEditorialDashboard && charts.length
+      ? `${body[0] ? renderBodyBlock(body[0]) : ""}${renderChart(charts[0])}${body.slice(1).map(renderBodyBlock).join("")}${charts.slice(1).map(renderChart).join("")}`
+      : `${body.map(renderBodyBlock).join("")}${charts.map(renderChart).join("")}`;
+    return `<section class="report-section" id="${escapeHtml(section.id)}"><header class="section-head"><p class="section-eyebrow">${escapeHtml(section.eyebrow)}</p><h2 class="section-title">${escapeHtml(section.title)}</h2><p class="section-dek">${escapeHtml(section.dek)}</p></header>${sectionContent}${section.annotation ? `<aside class="annotation"><strong>${escapeHtml(t("analyst_annotation"))}</strong><p>${escapeHtml(section.annotation)}</p></aside>` : ""}${section.takeaways?.length ? `<div class="takeaways"><h3>${escapeHtml(t("decision_takeaways"))}</h3><ul>${section.takeaways.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}</section>`;
+  };
+
+  const uniqueFactIds = (ids = []) => [...new Set(ids)].filter((id) => facts.has(id));
+  const collectFactIds = (value, result = []) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => collectFactIds(item, result));
+      return result;
+    }
+    if (!value || typeof value !== "object") return result;
+    Object.entries(value).forEach(([key, nested]) => {
+      if (key === "fact_id" && typeof nested === "string") result.push(nested);
+      else if (key === "fact_ids" && Array.isArray(nested)) nested.forEach((id) => { if (typeof id === "string") result.push(id); });
+      else collectFactIds(nested, result);
+    });
+    return result;
+  };
+
+  const dashboardForSection = (section) => {
+    const declared = section.dashboard && typeof section.dashboard === "object" ? section.dashboard : {};
+    const sectionFacts = uniqueFactIds(collectFactIds({ body: section.body || [], charts: section.charts || [] }));
+    const globalFacts = uniqueFactIds(report.kpis || []);
+    const candidates = uniqueFactIds([...sectionFacts, ...globalFacts]);
+    const primaryFactId = facts.has(declared.primary_fact_id) ? declared.primary_fact_id : candidates[0];
+    const declaredTrend = uniqueFactIds(declared.trend_fact_ids || []);
+    const primaryUnit = facts.get(primaryFactId)?.unit;
+    const sameUnit = candidates.filter((id) => !primaryUnit || facts.get(id)?.unit === primaryUnit);
+    const trendFactIds = declaredTrend.length >= 2 ? declaredTrend : sameUnit.slice(0, 6);
+    const metricFactIds = uniqueFactIds(declared.metric_fact_ids || []).length
+      ? uniqueFactIds(declared.metric_fact_ids).slice(0, 4)
+      : candidates.filter((id) => id !== primaryFactId).slice(0, 4);
+    const probabilityFacts = candidates.filter((id) => facts.get(id)?.kind === "probability");
+    const declaredScenarios = uniqueFactIds(declared.scenario_fact_ids || []);
+    const scenarioFactIds = (declaredScenarios.length ? declaredScenarios : probabilityFacts).slice(0, 3);
+    return { primaryFactId, trendFactIds, metricFactIds, scenarioFactIds };
+  };
+
+  const renderDashboardTrend = (factIds) => {
+    const series = uniqueFactIds(factIds).map((id) => facts.get(id)).filter((fact) => Number.isFinite(Number(fact?.value)));
+    if (series.length < 2) return "";
+    const values = series.map((fact) => Number(fact.value));
+    const minimum = Math.min(...values);
+    const maximum = Math.max(...values);
+    const span = maximum - minimum || 1;
+    const points = series.map((fact, index) => ({
+      fact,
+      x: 8 + index / Math.max(1, series.length - 1) * 84,
+      y: 84 - (Number(fact.value) - minimum) / span * 64,
+    }));
+    const line = points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+    const marks = points.map((point) => `<button class="dashboard-trend-mark" type="button" data-fact-id="${escapeHtml(point.fact.id)}" aria-label="${escapeHtml(`${point.fact.label}: ${point.fact.display}`)}" style="--trend-x:${point.x}%;--trend-y:${point.y}%"></button>`).join("");
+    return `<section class="dashboard-trend" aria-label="${escapeHtml(t("evidence_trend"))}"><p class="dashboard-subhead">${escapeHtml(t("evidence_trend"))}</p><div class="dashboard-trend-plot"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><line x1="8" y1="84" x2="92" y2="84"></line><line x1="8" y1="52" x2="92" y2="52"></line><line x1="8" y1="20" x2="92" y2="20"></line><polyline points="${line}"></polyline></svg>${marks}</div></section>`;
+  };
+
+  const renderDashboardFact = (id, className) => {
+    const fact = facts.get(id);
+    if (!fact) return "";
+    return `<button class="${className}" type="button" data-fact-id="${escapeHtml(id)}"><strong>${escapeHtml(fact.display)}</strong><span>${escapeHtml(fact.label)}</span><small>${escapeHtml(fact.date)}</small></button>`;
+  };
+
+  const renderDashboardState = (section, index) => {
+    const dashboard = dashboardForSection(section);
+    const primary = facts.get(dashboard.primaryFactId);
+    return `<section class="dashboard-state${index === 0 ? " is-active" : ""}" data-dashboard-state="${escapeHtml(section.id)}"${index === 0 ? "" : " hidden"}>
+      <header class="dashboard-head"><p class="dashboard-eyebrow">${escapeHtml(section.eyebrow)} · ${escapeHtml(t("research_dashboard"))}</p><h3>${escapeHtml(section.title)}</h3><p>${escapeHtml(section.dek)}</p></header>
+      ${primary ? `<div class="dashboard-primary-wrap"><p class="dashboard-subhead">${escapeHtml(t("current_reading"))}</p>${renderDashboardFact(primary.id, "dashboard-primary")}</div>` : ""}
+      ${renderDashboardTrend(dashboard.trendFactIds)}
+      ${dashboard.metricFactIds.length ? `<section class="dashboard-metrics"><p class="dashboard-subhead">${escapeHtml(t("chapter_indicators"))}</p><div class="dashboard-metric-grid">${dashboard.metricFactIds.map((id) => renderDashboardFact(id, "dashboard-metric")).join("")}</div></section>` : ""}
+      ${dashboard.scenarioFactIds.length ? `<section class="dashboard-signals"><p class="dashboard-subhead">${escapeHtml(t("decision_signals"))}</p><div class="dashboard-signal-list">${dashboard.scenarioFactIds.map((id) => renderDashboardFact(id, "dashboard-signal")).join("")}</div></section>` : ""}
+      <footer class="dashboard-contract"><p>${escapeHtml(t("contract_summary", { facts: report.facts?.length || 0, sources: report.sources?.length || 0, date: report.meta.as_of }))}</p><p>${escapeHtml(t("evidence_hint"))}</p></footer>
+    </section>`;
+  };
+
+  const renderChapterTrack = () => `<div class="chapter-track"><p class="chapter-track-label">${escapeHtml(t("chapter_progress"))}</p><nav class="rail-nav" aria-label="${escapeHtml(t("contents"))}">${(report.sections || []).map((section, index) => `<a href="#${escapeHtml(section.id)}" data-section-link="${escapeHtml(section.id)}"${index === 0 ? " class=\"is-active\"" : ""}><span>${escapeHtml(section.eyebrow)}</span><strong>${escapeHtml(section.nav_label || section.title)}</strong></a>`).join("")}</nav></div>`;
 
   const renderRail = () => `<aside class="research-rail" aria-label="${escapeHtml(t("report_dashboard"))}"><div class="rail-block"><p class="rail-label">${escapeHtml(t("key_numbers"))}</p><div class="rail-kpis">${(report.kpis || []).map((id) => { const fact = facts.get(id); return fact ? `<button class="kpi" type="button" data-fact-id="${escapeHtml(id)}"><span class="kpi-value">${escapeHtml(fact.display)}</span><span class="kpi-label">${escapeHtml(fact.label)}</span><span class="kpi-date">${escapeHtml(fact.date)}</span></button>` : ""; }).join("")}</div></div><div class="rail-block"><p class="rail-label">${escapeHtml(t("contents"))}</p><nav class="rail-nav">${(report.sections || []).map((section) => `<a href="#${escapeHtml(section.id)}" data-section-link="${escapeHtml(section.id)}">${escapeHtml(section.eyebrow)} · ${escapeHtml(section.title)}</a>`).join("")}</nav></div><div class="rail-block rail-meta"><p class="rail-label">${escapeHtml(t("research_contract"))}</p><p>${escapeHtml(t("contract_summary", { facts: report.facts?.length || 0, sources: report.sources?.length || 0, date: report.meta.as_of }))}</p><p>${escapeHtml(t("evidence_hint"))}</p></div></aside>`;
+  const renderDashboardRail = () => `<aside class="research-rail research-dashboard" aria-label="${escapeHtml(t("report_dashboard"))}" data-active-section="${escapeHtml(report.sections?.[0]?.id || "")}">${(report.sections || []).map(renderDashboardState).join("")}</aside>`;
 
   const sourceLocator = (source) => source.locator && typeof source.locator === "object" ? Object.entries(source.locator).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(" · ") : "";
   const renderSource = (source) => {
@@ -670,7 +765,7 @@
   };
   const renderBackmatter = () => `<section class="backmatter" id="sources"><p class="section-eyebrow">${escapeHtml(t("methods_evidence"))}</p><h2>${escapeHtml(t("how_to_read"))}</h2>${renderPresetChecks()}<h3>${escapeHtml(t("methodology"))}</h3><ul class="method-list">${(report.methodology || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><h3>${escapeHtml(t("disclosures"))}</h3><ul class="disclosure-list">${(report.disclosures || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="source-register" aria-label="${escapeHtml(t("source_register"))}">${(report.sources || []).map(renderSource).join("")}</div></section>`;
 
-  app.innerHTML = `${renderDataDisclosure()}${renderCover()}<div class="report-shell" id="report-content"><div class="report-layout">${renderRail()}<main class="article-flow">${(report.sections || []).map(renderSection).join("")}${renderBackmatter()}</main></div></div>`;
+  app.innerHTML = `${renderDataDisclosure()}${renderCover()}<div class="report-shell" id="report-content">${isEditorialDashboard ? renderChapterTrack() : ""}<div class="report-layout">${isEditorialDashboard ? renderDashboardRail() : renderRail()}<main class="article-flow">${(report.sections || []).map(renderSection).join("")}${renderBackmatter()}</main></div></div>`;
 
   const historyControllers = new WeakMap();
   const setupHistoryScrolly = () => {
@@ -975,15 +1070,54 @@
   if ("IntersectionObserver" in window) {
     const links = new Map([...document.querySelectorAll("[data-section-link]")].map((link) => [link.dataset.sectionLink, link]));
     const activateSection = (sectionId) => {
-      links.forEach((link) => link.classList.toggle("is-active", link.dataset.sectionLink === sectionId));
+      links.forEach((link) => {
+        const activeLink = link.dataset.sectionLink === sectionId;
+        link.classList.toggle("is-active", activeLink);
+        if (activeLink) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
+      document.querySelectorAll("[data-dashboard-state]").forEach((state) => {
+        const activeState = state.dataset.dashboardState === sectionId;
+        state.hidden = !activeState;
+        state.classList.toggle("is-active", activeState);
+      });
+      const dashboardRail = document.querySelector(".research-dashboard");
+      if (dashboardRail) dashboardRail.dataset.activeSection = sectionId;
       const active = links.get(sectionId);
       const nav = active?.closest(".rail-nav");
-      if (active && nav && report.presentation?.preset === "editorial-scrollspy") {
+      if (active && nav && ["editorial-scrollspy", "editorial-dashboard"].includes(presentationPreset)) {
         const targetLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
         nav.scrollTo({ left: Math.max(0, targetLeft), behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       }
     };
-    const observer = new IntersectionObserver((entries) => entries.filter((entry) => entry.isIntersecting).forEach((entry) => activateSection(entry.target.id)), { rootMargin: "-20% 0px -65%", threshold: 0 });
-    document.querySelectorAll(".report-section").forEach((section) => observer.observe(section));
+    if (report.sections?.[0]?.id) activateSection(report.sections[0].id);
+    const observedSections = [...document.querySelectorAll(".report-section")];
+    const syncDashboardToViewport = () => {
+      const trackHeight = document.querySelector(".chapter-track")?.getBoundingClientRect().height || 0;
+      const anchor = Math.max(trackHeight + 18, innerHeight * 0.22);
+      const geometry = observedSections.map((section) => ({ section, rect: section.getBoundingClientRect() }));
+      const containing = geometry.find(({ rect }) => rect.top <= anchor && rect.bottom > anchor);
+      const selected = containing || geometry.reduce((best, item) => !best || Math.abs(item.rect.top - anchor) < Math.abs(best.rect.top - anchor) ? item : best, null);
+      if (selected?.section.id) activateSection(selected.section.id);
+    };
+    const observer = new IntersectionObserver((entries) => {
+      if (isEditorialDashboard) syncDashboardToViewport();
+      else entries.filter((entry) => entry.isIntersecting).forEach((entry) => activateSection(entry.target.id));
+    }, { rootMargin: "-20% 0px -65%", threshold: 0 });
+    observedSections.forEach((section) => observer.observe(section));
+    if (isEditorialDashboard) {
+      let dashboardScrollQueued = false;
+      const queueDashboardSync = () => {
+        if (dashboardScrollQueued) return;
+        dashboardScrollQueued = true;
+        requestAnimationFrame(() => {
+          dashboardScrollQueued = false;
+          syncDashboardToViewport();
+        });
+      };
+      window.addEventListener("scroll", queueDashboardSync, { passive: true });
+      window.addEventListener("resize", queueDashboardSync, { passive: true });
+      requestAnimationFrame(syncDashboardToViewport);
+    }
   }
 })();

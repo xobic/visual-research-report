@@ -1,4 +1,4 @@
 interface:
   display_name: "Visual Research Report"
-  short_description: "Build sourced research sites with Image 2 cover storytelling"
-  default_prompt: "Use $build-visual-research-report to turn this report and reference into a sourced scroll-driven research site, generate its identity-locked four-state theme-atom cover with Image 2, and package it for offline delivery."
+  short_description: "Build sourced research sites with synchronized evidence dashboards"
+  default_prompt: "Use $build-visual-research-report to turn this report and reference into a sourced, chapter-synchronized research site, generate its identity-locked four-state theme-atom cover with Image 2, and package it for offline delivery."
